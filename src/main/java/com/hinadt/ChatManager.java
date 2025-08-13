@@ -28,6 +28,7 @@ public class ChatManager {
     private static TeleportationTools teleportTools;
     private static WeatherTools weatherTools;
     private static PlayerStatsTools playerStatsTools;
+    private static WorldAnalysisTools worldAnalysisTools;
     
     // 正则表达式匹配模式
     private static final Pattern GIVE_PATTERN = Pattern.compile("(?:给我|give me)\\s+(.+)", Pattern.CASE_INSENSITIVE);
@@ -37,6 +38,8 @@ public class ChatManager {
     private static final Pattern TIME_PATTERN = Pattern.compile("(?:时间|time)\\s+(.+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern HEAL_PATTERN = Pattern.compile("(?:治疗|heal)(?:\\s+(.+))?", Pattern.CASE_INSENSITIVE);
     private static final Pattern PLAYER_INFO_PATTERN = Pattern.compile("(?:玩家信息|player info|查看)\\s+(.+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ANALYZE_PATTERN = Pattern.compile("(?:分析环境|analyze|环境|surroundings)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern FIND_PATTERN = Pattern.compile("(?:寻找|找|find)\\s+(.+)", Pattern.CASE_INSENSITIVE);
     
     public static void initialize(MinecraftServer minecraftServer) {
         server = minecraftServer;
@@ -44,6 +47,7 @@ public class ChatManager {
         teleportTools = new TeleportationTools(server);
         weatherTools = new WeatherTools(server);
         playerStatsTools = new PlayerStatsTools(server);
+        worldAnalysisTools = new WorldAnalysisTools(server);
         
         // 注册聊天事件监听器
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
@@ -113,6 +117,17 @@ public class ChatManager {
             return handlePlayerInfoRequest(player, playerInfoMatcher.group(1).trim());
         }
         
+        // 检查是否是环境分析请求
+        if (ANALYZE_PATTERN.matcher(message).find()) {
+            return handleAnalyzeRequest(player);
+        }
+        
+        // 检查是否是资源寻找请求
+        Matcher findMatcher = FIND_PATTERN.matcher(message);
+        if (findMatcher.find()) {
+            return handleFindRequest(player, findMatcher.group(1).trim());
+        }
+        
         // 检查是否是物品给予请求
         Matcher giveMatcher = GIVE_PATTERN.matcher(message);
         if (giveMatcher.find()) {
@@ -177,6 +192,11 @@ public class ChatManager {
         • "治疗" 或 "治疗 [玩家名]" - 治疗玩家
         • "玩家信息 [玩家名]" - 查看玩家状态
         • "在线玩家" - 查看在线玩家列表
+        
+        🔍 环境分析：
+        • "分析环境" - 分析周围环境
+        • "寻找 [资源]" - 寻找特定资源
+        • 支持寻找：矿物、木材、水源等
         
         💬 智能聊天：
         • 直接聊天获得AI回复和游戏建议
@@ -370,6 +390,48 @@ public class ChatManager {
         } catch (Exception e) {
             AiMisakiMod.LOGGER.error("处理玩家信息请求时出错", e);
             return "抱歉，我无法获取玩家信息：" + e.getMessage();
+        }
+    }
+    
+    private static String handleAnalyzeRequest(ServerPlayerEntity player) {
+        try {
+            String prompt = String.format(
+                "玩家 %s 想要分析周围的环境。请使用 analyze_surroundings 工具分析玩家周围的环境信息，" +
+                "包括生物群系、方块、生物等。请用中文回复分析结果。",
+                player.getName().getString()
+            );
+            
+            return AiRuntime.AIClient
+                .prompt()
+                .user(prompt)
+                .tools(worldAnalysisTools)
+                .call()
+                .content();
+                
+        } catch (Exception e) {
+            AiMisakiMod.LOGGER.error("处理环境分析请求时出错", e);
+            return "抱歉，我无法分析环境：" + e.getMessage();
+        }
+    }
+    
+    private static String handleFindRequest(ServerPlayerEntity player, String resource) {
+        try {
+            String prompt = String.format(
+                "玩家 %s 想要寻找 '%s'。请使用 find_resources 工具帮助玩家找到相关资源。" +
+                "请根据资源名称选择合适的资源类型（如：ore矿物、wood木材、water水源等）。请用中文回复搜索结果。",
+                player.getName().getString(), resource
+            );
+            
+            return AiRuntime.AIClient
+                .prompt()
+                .user(prompt)
+                .tools(worldAnalysisTools)
+                .call()
+                .content();
+                
+        } catch (Exception e) {
+            AiMisakiMod.LOGGER.error("处理资源寻找请求时出错", e);
+            return "抱歉，我无法寻找资源：" + e.getMessage();
         }
     }
 }

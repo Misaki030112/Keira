@@ -30,10 +30,17 @@ public class AiMisakiMod implements ModInitializer {
 			try {
 				AiRuntime.init();
 				ChatManager.initialize(server);
+				AutoMessageSystem.initialize(server);
 				LOGGER.info("AI系统初始化完成！");
 			} catch (Exception e) {
 				LOGGER.error("AI系统初始化失败: " + e.getMessage(), e);
 			}
+		});
+
+		// Cleanup when server stops
+		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+			LOGGER.info("服务器停止，正在清理AI系统...");
+			AutoMessageSystem.shutdown();
 		});
 
 		LOGGER.info("AI Misaki Mod 加载完成！");
