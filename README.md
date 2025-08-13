@@ -1,9 +1,63 @@
-# Fabric Example Mod
+# AI Misaki Mod
 
-## Setup
+一个智能的 Minecraft Fabric 模组，集成 AI 助手功能，支持智能聊天、物品管理、传送、建筑辅助等功能。
 
-For setup instructions please see the [fabric documentation page](https://docs.fabricmc.net/develop/getting-started/setting-up-a-development-environment) that relates to the IDE that you are using.
+## 🌟 主要特性
 
-## License
+- **🤖 AI 智能聊天**：基于 DeepSeek 模型的智能对话系统
+- **📦 智能物品给予**：语音识别物品请求并自动给予
+- **🚀 传送功能**：支持坐标、地点名称和玩家传送
+- **🏗️ 建筑辅助**：提供建造建议和材料清单
+- **🌤️ 天气控制**：AI 控制天气变化
+- **🕐 时间控制**：智能时间管理
 
-This template is available under the CC0 license. Feel free to learn from it and incorporate it in your own projects.
+## 🚀 快速开始
+
+### 环境要求
+- Minecraft 1.21.1
+- Fabric Loader 0.16.14+
+- Java 21+
+- Fabric API
+
+### 安装步骤
+1. 安装 Fabric Loader 和 Fabric API
+2. 设置环境变量 `DEEPSEEK_API_KEY`
+3. 将模组文件放入 `mods` 文件夹
+4. 启动游戏并享受 AI 助手功能
+
+## 📖 使用说明
+
+### 基础命令
+- `帮助` - 显示功能列表
+- `给我 [物品名]` - 获得指定物品
+- `我要去 [地点]` - 传送到指定位置
+- `帮我建造 [建筑]` - 获得建造建议
+- `天气 [类型]` - 改变天气
+- `时间 [类型]` - 改变时间
+
+### 示例
+```
+给我钻石剑
+我要去出生点
+帮我建造城堡
+天气晴天
+时间白天
+```
+
+## 🛠️ 开发
+
+### 构建项目
+```bash
+./gradlew build
+```
+
+### 运行开发环境
+```bash
+./gradlew runClient
+```
+
+详细的功能说明和使用教程请查看 [完整文档](README_MOD.md)。
+
+## 📄 许可证
+
+本项目基于 MIT 许可证开源 - 查看 [LICENSE](LICENSE) 文件了解详情。

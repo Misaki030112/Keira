@@ -1,31 +1,31 @@
 {
 	"schemaVersion": 1,
-	"id": "modid",
+	"id": "ai-misaki-mod",
 	"version": "${version}",
-	"name": "Example mod",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"name": "AI Misaki Mod",
+	"description": "AI-powered Minecraft mod with intelligent chat responses, item giving, teleportation, and building assistance features. 一个AI驱动的MC模组，支持智能聊天、物品给予、传送和建筑辅助等功能。",
 	"authors": [
-		"Me!"
+		"Misaki030112"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/Misaki030112/mc-ai-mod",
+		"sources": "https://github.com/Misaki030112/mc-ai-mod"
 	},
-	"license": "CC0-1.0",
-	"icon": "assets/modid/icon.png",
+	"license": "MIT",
+	"icon": "assets/ai-misaki-mod/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.hinadt.ExampleMod"
+			"com.hinadt.AiMisakiMod"
 		],
 		"client": [
-			"com.hinadt.ExampleModClient"
+			"com.hinadt.AiMisakiModClient"
 		]
 	},
 	"mixins": [
-		"modid.mixins.json",
+		"ai-misaki-mod.mixins.json",
 		{
-			"config": "modid.client.mixins.json",
+			"config": "ai-misaki-mod.client.mixins.json",
 			"environment": "client"
 		}
 	],

@@ -23,7 +23,7 @@ public class ModItems {
     public static Item register(Item item, String id) {
 
         // Create the identifier for the item.
-        Identifier itemID = Identifier.of(ExampleMod.MOD_ID, id);
+        Identifier itemID = Identifier.of(AiMisakiMod.MOD_ID, id);
 
         // Register the item.
         // Return the registered item!

@@ -3,7 +3,8 @@
 	"package": "com.hinadt.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"ExampleMixin"
+		"ExampleMixin",
+		"PlayerJoinMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
