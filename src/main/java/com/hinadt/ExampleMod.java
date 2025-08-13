@@ -1,4 +1,4 @@
-package com.example;
+package com.hinadt;
 
 import net.fabricmc.api.ModInitializer;
 
@@ -20,5 +20,8 @@ public class ExampleMod implements ModInitializer {
 		// Proceed with mild caution.
 
 		LOGGER.info("Hello Fabric world!");
+
+		ModItems.initialize();
+
 	}
 }
