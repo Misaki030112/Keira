@@ -1,6 +1,7 @@
 package com.hinadt.mixin;
 
 import com.hinadt.AiMisakiMod;
+import com.hinadt.AiRuntime;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -15,21 +16,70 @@ public class PlayerJoinMixin {
     
     @Inject(method = "onPlayerConnect", at = @At("TAIL"))
     private void onPlayerJoin(ClientConnection connection, ServerPlayerEntity player, CallbackInfo ci) {
-        // 延迟发送欢迎消息，确保玩家完全加载
+        // 延迟发送AI生成的欢迎消息
         player.server.execute(() -> {
             try {
                 Thread.sleep(2000); // 等待2秒确保玩家完全加载
-                player.sendMessage(Text.of("§b=== AI Misaki Mod ===§r"));
-                player.sendMessage(Text.of("§f🤖 欢迎，" + player.getName().getString() + "！"));
-                player.sendMessage(Text.of("§f我是你的AI助手 Misaki，输入 §e'帮助'§f 查看功能列表"));
-                player.sendMessage(Text.of("§f支持功能：物品给予、传送、建筑辅助、天气控制等"));
-                player.sendMessage(Text.of("§f示例：§a给我钻石剑§f、§a我要去出生点§f、§a帮我建造城堡"));
-                player.sendMessage(Text.of("§b==================§r"));
                 
-                AiMisakiMod.LOGGER.info("玩家 {} 加入服务器，已发送欢迎消息", player.getName().getString());
+                // 发送AI生成的欢迎消息
+                generateAiWelcomeMessage(player);
+                
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         });
+    }
+    
+    private void generateAiWelcomeMessage(ServerPlayerEntity player) {
+        try {
+            String playerName = player.getName().getString();
+            String welcomePrompt = String.format("""
+                玩家 %s 刚刚加入服务器。请生成一个友好的欢迎消息，介绍AI Misaki Mod的主要功能。
+                
+                要包含：
+                1. 热情的个性化欢迎
+                2. 简要介绍你是AI助手Misaki
+                3. 核心功能概览（物品管理、智能传送、建筑助手、天气控制等）
+                4. 如何开始使用（输入 /ai help 查看命令）
+                5. 鼓励性的结语
+                
+                要求：
+                - 简洁友好，不超过150字
+                - 用中文
+                - 包含合适的emoji
+                - 让玩家感到兴奋和好奇
+                """, playerName);
+            
+            String welcomeMessage = AiRuntime.AIClient
+                .prompt()
+                .user(welcomePrompt)
+                .call()
+                .content();
+            
+            // 发送AI生成的欢迎消息
+            player.sendMessage(Text.of("§b🤖 [AI Misaki] §f" + welcomeMessage));
+            player.sendMessage(Text.of("§e💡 输入 §a/ai help §e查看完整功能列表！"));
+            
+            AiMisakiMod.LOGGER.info("已为玩家 {} 发送AI生成的欢迎消息", playerName);
+            
+        } catch (Exception e) {
+            // 如果AI生成失败，使用备用欢迎消息
+            String fallbackMessage = String.format("""
+                🤖 欢迎加入服务器，%s！
+                
+                我是AI助手Misaki，可以帮助你：
+                • 📦 智能物品管理
+                • 🚀 记忆式传送系统  
+                • 🏗️ 建筑设计建议
+                • 🌤️ 天气时间控制
+                • ❤️ 玩家状态管理
+                
+                输入 /ai help 开始体验AI驱动的游戏助手！
+                """, player.getName().getString());
+            
+            player.sendMessage(Text.of("§b🤖 [AI Misaki] §f" + fallbackMessage));
+            
+            AiMisakiMod.LOGGER.warn("AI欢迎消息生成失败，使用备用消息: " + e.getMessage());
+        }
     }
 }
