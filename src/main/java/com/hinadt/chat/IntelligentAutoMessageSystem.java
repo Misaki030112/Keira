@@ -261,32 +261,15 @@ public class IntelligentAutoMessageSystem {
     }
     
     // 命令工具：管理员控制系统
-    @Tool(
-        name = "toggle_auto_messages",
-        description = """
-        管理员工具：启用或禁用全服自动消息系统。
-        用于控制AI自动消息的开关状态。
-        """
-    )
-    public static String toggleAutoMessages(
-        @ToolParam(description = "是否启用自动消息系统") boolean enabled
-    ) {
+    // 管理员控制方法：启用或禁用全服自动消息系统
+    public static String toggleAutoMessages(boolean enabled) {
         systemEnabled = enabled;
         String status = enabled ? "启用" : "禁用";
         return "✅ 自动消息系统已" + status;
     }
     
-    @Tool(
-        name = "toggle_player_auto_messages",
-        description = """
-        允许玩家选择是否接收个性化自动消息。
-        玩家可以通过此功能控制是否接收AI的个人提示。
-        """
-    )
-    public static String togglePlayerAutoMessages(
-        @ToolParam(description = "玩家名称") String playerName,
-        @ToolParam(description = "是否接收自动消息") boolean enabled
-    ) {
+    // 管理员控制方法：为特定玩家启用或禁用个性化自动消息
+    public static String togglePlayerAutoMessages(String playerName, boolean enabled) {
         playerOptOut.put(playerName, !enabled);
         String status = enabled ? "启用" : "禁用";
         return String.format("✅ 已为玩家 %s %s个性化自动消息", playerName, status);

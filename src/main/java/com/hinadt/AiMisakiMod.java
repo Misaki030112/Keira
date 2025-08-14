@@ -60,6 +60,7 @@ public class AiMisakiMod implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
 			LOGGER.info("🔄 服务器停止，正在清理AI系统...");
 			IntelligentAutoMessageSystem.shutdown();
+			AiRuntime.shutdown();
 			LOGGER.info("✅ AI系统清理完成");
 		});
 

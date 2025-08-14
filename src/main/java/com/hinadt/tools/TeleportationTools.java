@@ -28,23 +28,6 @@ public class TeleportationTools {
     
     private final MinecraftServer server;
     
-    // 预定义的常用地点
-    private static final Map<String, Vec3d> PREDEFINED_LOCATIONS = new HashMap<>();
-    static {
-        PREDEFINED_LOCATIONS.put("出生点", new Vec3d(0, 70, 0));
-        PREDEFINED_LOCATIONS.put("spawn", new Vec3d(0, 70, 0));
-        PREDEFINED_LOCATIONS.put("主城", new Vec3d(100, 70, 100));
-        PREDEFINED_LOCATIONS.put("city", new Vec3d(100, 70, 100));
-        PREDEFINED_LOCATIONS.put("矿洞", new Vec3d(0, 20, 0));
-        PREDEFINED_LOCATIONS.put("mine", new Vec3d(0, 20, 0));
-        PREDEFINED_LOCATIONS.put("农场", new Vec3d(-100, 70, -100));
-        PREDEFINED_LOCATIONS.put("farm", new Vec3d(-100, 70, -100));
-        PREDEFINED_LOCATIONS.put("海边", new Vec3d(0, 70, 500));
-        PREDEFINED_LOCATIONS.put("beach", new Vec3d(0, 70, 500));
-        PREDEFINED_LOCATIONS.put("山顶", new Vec3d(200, 120, 200));
-        PREDEFINED_LOCATIONS.put("mountain", new Vec3d(200, 120, 200));
-    }
-    
     public TeleportationTools(MinecraftServer server) {
         this.server = server;
     }
@@ -52,22 +35,44 @@ public class TeleportationTools {
     @Tool(
         name = "teleport_player",
         description = """
-        传送玩家到指定位置。这是一个智能传送工具，支持多种传送方式：
+        智能传送玩家到指定位置。这是一个AI驱动的传送工具，完全基于玩家记忆和智能解析：
         
-        1. 记忆位置传送：优先使用玩家之前保存的位置（如"家"、"农场"等）
-        2. 坐标传送：精确坐标格式如 "100 70 200" 或 "100,70,200"
-        3. 预设地点传送：系统预定义的常用位置（出生点、主城、矿洞、农场、海边、山顶）
-        4. 玩家传送：传送到其他在线玩家当前位置
-        5. 智能位置解析：根据描述词智能推测合适的位置（如"地下"、"天空"、"海边"等）
-        6. 多世界传送：支持主世界、下界、末地之间的传送
+        **传送优先级和策略**：
+        1. **记忆位置传送** (最高优先级)：使用玩家之前保存的位置
+           - 玩家说"带我回家"→查找记忆中的"家"
+           - 支持模糊匹配："农场"可以匹配"我的农场"、"大农场"等
         
-        使用优先级：记忆位置 > 精确坐标 > 其他玩家位置 > 预设地点 > 智能解析
+        2. **精确坐标传送**：支持多种坐标格式
+           - "100 70 200" 或 "100,70,200" 或 "100/70/200"
+           - 自动验证坐标合理性（Y坐标限制在-64到320之间）
+        
+        3. **玩家位置传送**：传送到其他在线玩家位置
+           - 输入其他玩家的用户名进行传送
+        
+        4. **智能位置解析**：基于自然语言描述智能推测位置
+           - "地下"→Y=20的合理地下位置
+           - "天空"→Y=200的高空位置  
+           - "海边"→接近海平面的位置
+           - "沙漠"、"森林"、"雪地"等生物群系关键词
+        
+        5. **世界出生点**：作为最后的fallback选项
+           - 仅当所有其他方式都失败时使用
+        
+        **安全特性**：
+        - 自动调整不安全的Y坐标
+        - 支持跨世界传送（主世界、下界、末地）
+        - 传送前后的位置确认和反馈
+        
+        **AI使用建议**：
+        - 优先查询玩家记忆位置
+        - 根据上下文智能选择最合适的传送方式
+        - 传送失败时提供清晰的原因和建议
         """
     )
     public String teleportPlayer(
         @ToolParam(description = "要传送的玩家名称") String playerName,
-        @ToolParam(description = "目标位置：可以是记忆中的位置名称（如'家'、'农场'）、精确坐标(x y z)、预设地点名称、其他玩家名称、或描述性位置（如'地下'、'天空'）") String destination,
-        @ToolParam(description = "目标世界，可选：overworld(主世界)、nether(下界)、end(末地)，默认为玩家当前世界或记忆位置指定的世界") String world
+        @ToolParam(description = "目标位置：优先使用记忆中的位置名称（如'家'、'农场'），其次是精确坐标(x y z)，或其他玩家名称，或智能描述性位置（如'地下'、'天空'、'海边'）") String destination,
+        @ToolParam(description = "目标世界，可选：overworld(主世界)、nether(下界)、end(末地)，默认为当前世界或记忆位置指定的世界") String world
     ) {
         // 找到目标玩家
         ServerPlayerEntity player = findPlayer(playerName);
@@ -75,7 +80,7 @@ public class TeleportationTools {
             return "❌ 错误：找不到玩家 " + playerName;
         }
         
-        // 1. 优先检查记忆中的位置
+        // 1. 最高优先级：检查记忆中的位置
         MemorySystem.LocationData savedLocation = MemorySystem.getLocationForTeleport(playerName, destination);
         if (savedLocation != null) {
             ServerWorld targetWorld = getTargetWorld(savedLocation.world);
@@ -86,36 +91,57 @@ public class TeleportationTools {
                    " (使用记忆位置：" + savedLocation.name + ")";
         }
         
-        // 2. 解析其他类型的目标位置
-        Vec3d targetPos = parseDestination(destination);
-        if (targetPos == null) {
-            // 3. 尝试作为其他玩家名称
-            ServerPlayerEntity targetPlayer = findPlayer(destination);
-            if (targetPlayer != null) {
-                targetPos = targetPlayer.getPos();
-                return teleportToPosition(player, targetPos, targetPlayer.getServerWorld()) + 
-                       " (传送到玩家 " + destination + " 的位置)";
+        // 2. 尝试解析为精确坐标
+        Vec3d targetPos = parseCoordinates(destination);
+        if (targetPos != null) {
+            ServerWorld targetWorld = getTargetWorld(world);
+            if (targetWorld == null) {
+                targetWorld = player.getServerWorld();
             }
+            return teleportToPosition(player, targetPos, targetWorld) + " (使用精确坐标)";
+        }
+        
+        // 3. 尝试作为其他玩家名称
+        ServerPlayerEntity targetPlayer = findPlayer(destination);
+        if (targetPlayer != null) {
+            return teleportToPosition(player, targetPlayer.getPos(), targetPlayer.getServerWorld()) + 
+                   " (传送到玩家 " + destination + " 的位置)";
+        }
+        
+        // 4. 智能解析位置描述
+        Vec3d intelligentPos = intelligentLocationParsing(destination, player);
+        if (intelligentPos != null) {
+            ServerWorld targetWorld = getTargetWorld(world);
+            if (targetWorld == null) {
+                targetWorld = player.getServerWorld();
+            }
+            return teleportToPosition(player, intelligentPos, targetWorld) + " (智能解析位置)";
+        }
+        
+        // 5. 最后尝试：世界出生点
+        if (destination.toLowerCase().contains("出生") || destination.toLowerCase().contains("spawn")) {
+            ServerWorld targetWorld = getTargetWorld(world);
+            if (targetWorld == null) {
+                targetWorld = player.getServerWorld();
+            }
+            BlockPos spawnPos = targetWorld.getSpawnPos();
+            Vec3d spawnVec = new Vec3d(spawnPos.getX(), spawnPos.getY(), spawnPos.getZ());
+            return teleportToPosition(player, spawnVec, targetWorld) + " (传送到世界出生点)";
+        }
+        
+        // 无法识别位置
+        return String.format("""
+            ❌ 无法识别目标位置 '%s'。
             
-            // 4. 智能解析位置描述
-            targetPos = intelligentLocationParsing(destination);
-            if (targetPos == null) {
-                return "❌ 错误：无法识别目标位置 '" + destination + "'。" +
-                       "请使用记忆位置名称、坐标格式(x y z)、预定义地点名称或玩家名称。" +
-                       "你也可以先用\"记住这里是我的[位置名]\"保存当前位置。";
-            }
-        }
-        
-        // 获取目标世界
-        ServerWorld targetWorld = getTargetWorld(world);
-        if (targetWorld == null) {
-            targetWorld = player.getServerWorld(); // 默认当前世界
-        }
-        
-        return teleportToPosition(player, targetPos, targetWorld);
+            💡 建议：
+            • 使用记忆位置：先说"记住这里是我的[位置名]"保存位置
+            • 使用精确坐标：格式如 "100 70 200"
+            • 传送到玩家：输入其他玩家的用户名
+            • 智能描述：如"地下"、"天空"、"海边"等
+            """, destination);
     }
     
-    private Vec3d parseDestination(String destination) {
+    private Vec3d parseCoordinates(String destination) {
         // 尝试解析坐标格式：x y z 或 x,y,z 或 x/y/z
         Pattern coordPattern = Pattern.compile("(-?\\d+)(?:[\\s,/]+)(-?\\d+)(?:[\\s,/]+)(-?\\d+)");
         Matcher matcher = coordPattern.matcher(destination.trim());
@@ -131,42 +157,47 @@ public class TeleportationTools {
             }
         }
         
-        // 尝试匹配预定义地点
-        String lowerDest = destination.toLowerCase().trim();
-        for (Map.Entry<String, Vec3d> entry : PREDEFINED_LOCATIONS.entrySet()) {
-            if (entry.getKey().toLowerCase().contains(lowerDest) || 
-                lowerDest.contains(entry.getKey().toLowerCase())) {
-                return entry.getValue();
-            }
-        }
-        
         return null;
     }
     
-    private Vec3d intelligentLocationParsing(String description) {
+    private Vec3d intelligentLocationParsing(String description, ServerPlayerEntity player) {
         String lower = description.toLowerCase().trim();
+        BlockPos currentPos = player.getBlockPos();
         
-        // 基于关键词的智能匹配
-        if (lower.contains("家") || lower.contains("home")) {
-            return new Vec3d(0, 70, 0); // 出生点作为家
-        }
+        // 基于当前位置的相对位置解析
         if (lower.contains("地下") || lower.contains("underground") || lower.contains("洞")) {
-            return new Vec3d(0, 20, 0);
+            // 在玩家当前位置下方的安全地下位置
+            return new Vec3d(currentPos.getX(), Math.max(20, currentPos.getY() - 30), currentPos.getZ());
         }
         if (lower.contains("天空") || lower.contains("sky") || lower.contains("高")) {
-            return new Vec3d(0, 200, 0);
+            // 在玩家当前位置上方的天空位置
+            return new Vec3d(currentPos.getX(), Math.min(250, currentPos.getY() + 50), currentPos.getZ());
         }
-        if (lower.contains("水") || lower.contains("sea") || lower.contains("ocean")) {
-            return new Vec3d(0, 62, 300); // 海平面
+        if (lower.contains("水") || lower.contains("sea") || lower.contains("ocean") || lower.contains("海")) {
+            // 寻找最近的海洋（这里简化为向某个方向的海平面位置）
+            return new Vec3d(currentPos.getX() + 200, 62, currentPos.getZ());
         }
+        
+        // 生物群系相关的智能解析（基于当前位置的偏移）
         if (lower.contains("沙漠") || lower.contains("desert")) {
-            return new Vec3d(500, 70, 500);
+            return new Vec3d(currentPos.getX() + 500, 70, currentPos.getZ() + 300);
         }
         if (lower.contains("森林") || lower.contains("forest")) {
-            return new Vec3d(-300, 70, -300);
+            return new Vec3d(currentPos.getX() - 300, 70, currentPos.getZ() - 200);
         }
         if (lower.contains("雪") || lower.contains("snow") || lower.contains("冰")) {
-            return new Vec3d(0, 70, -500);
+            return new Vec3d(currentPos.getX(), 70, currentPos.getZ() - 400);
+        }
+        if (lower.contains("山") || lower.contains("mountain") || lower.contains("hill")) {
+            return new Vec3d(currentPos.getX() + 100, 120, currentPos.getZ() + 100);
+        }
+        
+        // 通用位置描述
+        if (lower.contains("远方") || lower.contains("far")) {
+            return new Vec3d(currentPos.getX() + 1000, currentPos.getY(), currentPos.getZ() + 1000);
+        }
+        if (lower.contains("附近") || lower.contains("near")) {
+            return new Vec3d(currentPos.getX() + 50, currentPos.getY(), currentPos.getZ() + 50);
         }
         
         return null;

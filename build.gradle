@@ -53,28 +53,34 @@ dependencies {
 	implementation platform("org.springframework.ai:spring-ai-bom:1.0.1")
 
 	// 1) ChatClient 抽象（这里面才有 org.springframework.ai.chat.client.ChatClient）
-	implementation "org.springframework.ai:spring-ai-client-chat"
+	implementation("org.springframework.ai:spring-ai-client-chat") {
+		exclude group: 'com.fasterxml.jackson.core'
+		exclude group: 'com.fasterxml.jackson.datatype'
+	}
 
 	// 2) DeepSeek 模型实现
-	implementation "org.springframework.ai:spring-ai-deepseek"
-
-	// （可选）流式需要 Reactor；但排除有问题的 Jackson 版本
-	implementation "io.projectreactor:reactor-core"
-	implementation("com.fasterxml.jackson.core:jackson-databind") {
-		exclude group: 'com.fasterxml.jackson.core', module: 'jackson-core'
+	implementation("org.springframework.ai:spring-ai-deepseek") {
+		exclude group: 'com.fasterxml.jackson.core'
+		exclude group: 'com.fasterxml.jackson.datatype'
 	}
-	implementation "com.fasterxml.jackson.core:jackson-core:2.15.2"
 
-	// Fabric 打包：把这些依赖打进 mod（Jar-in-Jar）- 不包含有问题的Jackson版本
+	// （可选）流式需要 Reactor
+	implementation "io.projectreactor:reactor-core"
+	
+	// 嵌入式数据库支持 (H2)
+	implementation "com.h2database:h2:2.2.224"
+
+	// Fabric 打包：把这些依赖打进 mod（Jar-in-Jar）
 	include("org.springframework.ai:spring-ai-client-chat:1.0.1") {
 		exclude group: 'com.fasterxml.jackson.core'
+		exclude group: 'com.fasterxml.jackson.datatype'
 	}
 	include("org.springframework.ai:spring-ai-deepseek:1.0.1") {
 		exclude group: 'com.fasterxml.jackson.core'
+		exclude group: 'com.fasterxml.jackson.datatype'
 	}
 	include("io.projectreactor:reactor-core:3.6.9")
-	include("com.fasterxml.jackson.core:jackson-core:2.15.2")
-	include("com.fasterxml.jackson.core:jackson-databind:2.15.2")
+	include("com.h2database:h2:2.2.224")
 }
 
 processResources {
