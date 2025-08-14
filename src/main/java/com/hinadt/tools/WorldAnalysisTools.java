@@ -1,5 +1,6 @@
-package com.hinadt;
+package com.hinadt.tools;
 
+import com.hinadt.AiMisakiMod;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
@@ -289,18 +290,25 @@ public class WorldAnalysisTools {
     
     private String getBiomeDisplayName(Biome biome) {
         // 这里可以添加更多生物群系的中文名称映射
-        String biomePath = Registries.BIOME.getId(biome).getPath();
-        return switch (biomePath) {
+        // Use toString() method as fallback since Registries.BIOME might not be available
+        String biomeName = biome.toString();
+        String biomePath = extractBiomePath(biomeName);
+        
+        return switch (biomePath.toLowerCase()) {
             case "plains" -> "平原";
             case "forest" -> "森林";
             case "desert" -> "沙漠";
-            case "mountains" -> "山地";
+            case "mountains", "mountain" -> "山地";
             case "ocean" -> "海洋";
             case "river" -> "河流";
             case "swamp" -> "沼泽";
             case "taiga" -> "针叶林";
             case "savanna" -> "热带草原";
             case "badlands" -> "恶地";
+            case "jungle" -> "丛林";
+            case "ice_plains", "tundra" -> "冰原";
+            case "nether_wastes" -> "下界荒地";
+            case "the_end" -> "末地";
             default -> biomePath;
         };
     }
@@ -358,17 +366,17 @@ public class WorldAnalysisTools {
     }
     
     private String getEnvironmentSuggestion(Biome biome, int y, Map<Block, Integer> blocks) {
-        String biomePath = Registries.BIOME.getId(biome).getPath();
+        String biomePath = extractBiomePath(biome.toString());
         
         if (y < 16 && blocks.containsKey(Blocks.STONE)) {
             return "这里适合挖矿！注意带足够的火把和食物。";
         }
         
-        return switch (biomePath) {
+        return switch (biomePath.toLowerCase()) {
             case "desert" -> "沙漠地区要小心夜晚的怪物，建议建造避难所。";
             case "ocean" -> "海洋地区适合钓鱼和寻找海底遗迹。";
             case "forest" -> "森林是获取木材的好地方，也要小心夜晚的怪物。";
-            case "mountains" -> "山地视野开阔，适合建造高塔或城堡。";
+            case "mountains", "mountain" -> "山地视野开阔，适合建造高塔或城堡。";
             case "plains" -> "平原适合建造大型建筑和农场。";
             default -> "这个环境很适合探索和建造！";
         };
@@ -396,5 +404,39 @@ public class WorldAnalysisTools {
             try { task.run(); } finally { latch.countDown(); }
         });
         try { latch.await(); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+    }
+    
+    /**
+     * Helper method to extract biome path from biome toString representation
+     */
+    private String extractBiomePath(String biomeString) {
+        // Try to extract the path from the string representation
+        if (biomeString.contains("ResourceKey")) {
+            // Format might be like "ResourceKey[minecraft:biome / minecraft:plains]"
+            int lastSlash = biomeString.lastIndexOf('/');
+            if (lastSlash > 0 && lastSlash < biomeString.length() - 1) {
+                String path = biomeString.substring(lastSlash + 1);
+                path = path.replaceAll("[\\]\\)]", "").trim();
+                if (path.startsWith("minecraft:")) {
+                    path = path.substring("minecraft:".length());
+                }
+                return path;
+            }
+        }
+        
+        // Fallback to simple name extraction
+        String simpleName = biomeString.toLowerCase();
+        if (simpleName.contains("plains")) return "plains";
+        if (simpleName.contains("forest")) return "forest";
+        if (simpleName.contains("desert")) return "desert";
+        if (simpleName.contains("mountains") || simpleName.contains("hills")) return "mountains";
+        if (simpleName.contains("ocean")) return "ocean";
+        if (simpleName.contains("river")) return "river";
+        if (simpleName.contains("swamp")) return "swamp";
+        if (simpleName.contains("jungle")) return "jungle";
+        if (simpleName.contains("taiga")) return "taiga";
+        if (simpleName.contains("tundra") || simpleName.contains("ice")) return "ice_plains";
+        
+        return biomeString; // 返回原名作为备选
     }
 }

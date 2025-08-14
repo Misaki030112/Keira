@@ -1,5 +1,6 @@
-package com.hinadt;
+package com.hinadt.tools;
 
+import com.hinadt.AiMisakiMod;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;

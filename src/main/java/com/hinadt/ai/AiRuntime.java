@@ -1,4 +1,4 @@
-package com.hinadt;
+package com.hinadt.ai;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.deepseek.DeepSeekChatModel;

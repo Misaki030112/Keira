@@ -1,5 +1,8 @@
 package com.hinadt;
 
+import com.hinadt.ai.AiRuntime;
+import com.hinadt.chat.AiChatSystem;
+import com.hinadt.chat.IntelligentAutoMessageSystem;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 

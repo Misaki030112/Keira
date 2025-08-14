@@ -1,5 +1,8 @@
-package com.hinadt;
+package com.hinadt.chat;
 
+import com.hinadt.AiMisakiMod;
+import com.hinadt.ai.AiRuntime;
+import com.hinadt.ai.AiWorkflowManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.server.MinecraftServer;

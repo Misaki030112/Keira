@@ -1,5 +1,6 @@
-package com.hinadt;
+package com.hinadt.tools;
 
+import com.hinadt.AiMisakiMod;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;

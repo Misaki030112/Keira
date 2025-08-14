@@ -1,7 +1,7 @@
 package com.hinadt.mixin;
 
 import com.hinadt.AiMisakiMod;
-import com.hinadt.AiRuntime;
+import com.hinadt.ai.AiRuntime;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.network.ServerPlayerEntity;

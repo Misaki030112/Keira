@@ -1,5 +1,6 @@
-package com.hinadt;
+package com.hinadt.ai;
 
+import com.hinadt.AiMisakiMod;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;

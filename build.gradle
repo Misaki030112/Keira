@@ -58,15 +58,23 @@ dependencies {
 	// 2) DeepSeek 模型实现
 	implementation "org.springframework.ai:spring-ai-deepseek"
 
-	// （可选）流式需要 Reactor；以及显式 Jackson
+	// （可选）流式需要 Reactor；但排除有问题的 Jackson 版本
 	implementation "io.projectreactor:reactor-core"
-	implementation "com.fasterxml.jackson.core:jackson-databind"
+	implementation("com.fasterxml.jackson.core:jackson-databind") {
+		exclude group: 'com.fasterxml.jackson.core', module: 'jackson-core'
+	}
+	implementation "com.fasterxml.jackson.core:jackson-core:2.15.2"
 
-	// Fabric 打包：把这些依赖打进 mod（Jar-in-Jar）
-	include("org.springframework.ai:spring-ai-client-chat:1.0.1")
-	include("org.springframework.ai:spring-ai-deepseek:1.0.1")
+	// Fabric 打包：把这些依赖打进 mod（Jar-in-Jar）- 不包含有问题的Jackson版本
+	include("org.springframework.ai:spring-ai-client-chat:1.0.1") {
+		exclude group: 'com.fasterxml.jackson.core'
+	}
+	include("org.springframework.ai:spring-ai-deepseek:1.0.1") {
+		exclude group: 'com.fasterxml.jackson.core'
+	}
 	include("io.projectreactor:reactor-core:3.6.9")
-	include("com.fasterxml.jackson.core:jackson-databind:2.17.2")
+	include("com.fasterxml.jackson.core:jackson-core:2.15.2")
+	include("com.fasterxml.jackson.core:jackson-databind:2.15.2")
 }
 
 processResources {

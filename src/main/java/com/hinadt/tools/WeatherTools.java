@@ -1,5 +1,6 @@
-package com.hinadt;
+package com.hinadt.tools;
 
+import com.hinadt.AiMisakiMod;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -60,7 +61,8 @@ public class WeatherTools {
             targetWorld = server.getOverworld();
         }
         
-        int weatherDuration = (duration != null && duration > 0) ? duration * 20 : 12000; // 转换为游戏tick
+        final ServerWorld finalTargetWorld = targetWorld;
+        final int weatherDuration = (duration != null && duration > 0) ? duration * 20 : 12000; // 转换为游戏tick
         
         AtomicReference<String> result = new AtomicReference<>("天气变更失败");
         
@@ -71,19 +73,19 @@ public class WeatherTools {
                 switch (weatherName.toLowerCase()) {
                     case "clear":
                     case "晴天":
-                        targetWorld.setWeather(weatherDuration, 0, false, false);
+                        finalTargetWorld.setWeather(weatherDuration, 0, false, false);
                         result.set("☀️ 天气已变更为晴天，持续 " + (weatherDuration/20) + " 秒");
                         break;
                         
                     case "rain":
                     case "雨天":
-                        targetWorld.setWeather(0, weatherDuration, true, false);
+                        finalTargetWorld.setWeather(0, weatherDuration, true, false);
                         result.set("🌧️ 天气已变更为雨天，持续 " + (weatherDuration/20) + " 秒");
                         break;
                         
                     case "thunder":
                     case "雷雨":
-                        targetWorld.setWeather(0, weatherDuration, true, true);
+                        finalTargetWorld.setWeather(0, weatherDuration, true, true);
                         result.set("⛈️ 天气已变更为雷雨，持续 " + (weatherDuration/20) + " 秒");
                         break;
                         
@@ -93,7 +95,7 @@ public class WeatherTools {
                 }
                 
                 // 广播天气变更消息
-                String worldName = getWorldDisplayName(targetWorld);
+                String worldName = getWorldDisplayName(finalTargetWorld);
                 server.getPlayerManager().broadcast(
                     Text.of("[AI Misaki] " + result.get() + " (世界: " + worldName + ")"), 
                     false
@@ -129,6 +131,7 @@ public class WeatherTools {
             targetWorld = server.getOverworld();
         }
         
+        final ServerWorld finalTargetWorld = targetWorld;
         AtomicReference<String> result = new AtomicReference<>("时间设置失败");
         
         runOnMainAndWait(() -> {
@@ -139,10 +142,10 @@ public class WeatherTools {
                     return;
                 }
                 
-                targetWorld.setTimeOfDay(gameTime);
+                finalTargetWorld.setTimeOfDay(gameTime);
                 
                 String timeName = getTimeDisplayName(gameTime);
-                String worldName = getWorldDisplayName(targetWorld);
+                String worldName = getWorldDisplayName(finalTargetWorld);
                 
                 result.set("🕐 时间已设置为 " + timeName + " (世界: " + worldName + ")");
                 

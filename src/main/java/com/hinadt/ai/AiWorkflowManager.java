@@ -1,5 +1,7 @@
-package com.hinadt;
+package com.hinadt.ai;
 
+import com.hinadt.AiMisakiMod;
+import com.hinadt.tools.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.BlockPos;

@@ -1,5 +1,7 @@
-package com.hinadt;
+package com.hinadt.chat;
 
+import com.hinadt.AiMisakiMod;
+import com.hinadt.ai.AiRuntime;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
