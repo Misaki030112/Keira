@@ -50,28 +50,44 @@ public class TeleportationTools {
     @Tool(
         name = "teleport_player",
         description = """
-        传送玩家到指定位置。支持多种传送方式：
-        1. 坐标传送：x y z 格式
-        2. 预定义地点：出生点、主城、矿洞、农场、海边、山顶等
-        3. 玩家传送：传送到其他在线玩家位置
-        4. 智能解析：根据描述猜测合适的位置
+        传送玩家到指定位置。这是一个智能传送工具，支持多种传送方式：
+        
+        1. 记忆位置传送：优先使用玩家之前保存的位置（如"家"、"农场"等）
+        2. 坐标传送：精确坐标格式如 "100 70 200" 或 "100,70,200"
+        3. 预设地点传送：系统预定义的常用位置（出生点、主城、矿洞、农场、海边、山顶）
+        4. 玩家传送：传送到其他在线玩家当前位置
+        5. 智能位置解析：根据描述词智能推测合适的位置（如"地下"、"天空"、"海边"等）
+        6. 多世界传送：支持主世界、下界、末地之间的传送
+        
+        使用优先级：记忆位置 > 精确坐标 > 其他玩家位置 > 预设地点 > 智能解析
         """
     )
     public String teleportPlayer(
         @ToolParam(description = "要传送的玩家名称") String playerName,
-        @ToolParam(description = "目标位置，可以是坐标(x y z)、地点名称或其他玩家名称") String destination,
-        @ToolParam(description = "目标世界，可选：overworld(主世界)、nether(下界)、end(末地)，默认主世界") String world
+        @ToolParam(description = "目标位置：可以是记忆中的位置名称（如'家'、'农场'）、精确坐标(x y z)、预设地点名称、其他玩家名称、或描述性位置（如'地下'、'天空'）") String destination,
+        @ToolParam(description = "目标世界，可选：overworld(主世界)、nether(下界)、end(末地)，默认为玩家当前世界或记忆位置指定的世界") String world
     ) {
         // 找到目标玩家
         ServerPlayerEntity player = findPlayer(playerName);
         if (player == null) {
-            return "错误：找不到玩家 " + playerName;
+            return "❌ 错误：找不到玩家 " + playerName;
         }
         
-        // 解析目标位置
+        // 1. 优先检查记忆中的位置
+        MemorySystem.LocationData savedLocation = MemorySystem.getLocationForTeleport(playerName, destination);
+        if (savedLocation != null) {
+            ServerWorld targetWorld = getTargetWorld(savedLocation.world);
+            if (targetWorld == null) {
+                targetWorld = player.getServerWorld();
+            }
+            return teleportToPosition(player, savedLocation.toVec3d(), targetWorld) + 
+                   " (使用记忆位置：" + savedLocation.name + ")";
+        }
+        
+        // 2. 解析其他类型的目标位置
         Vec3d targetPos = parseDestination(destination);
         if (targetPos == null) {
-            // 尝试作为其他玩家名称
+            // 3. 尝试作为其他玩家名称
             ServerPlayerEntity targetPlayer = findPlayer(destination);
             if (targetPlayer != null) {
                 targetPos = targetPlayer.getPos();
@@ -79,10 +95,12 @@ public class TeleportationTools {
                        " (传送到玩家 " + destination + " 的位置)";
             }
             
-            // 智能解析位置描述
+            // 4. 智能解析位置描述
             targetPos = intelligentLocationParsing(destination);
             if (targetPos == null) {
-                return "错误：无法识别目标位置 '" + destination + "'。请使用坐标格式(x y z)或预定义地点名称。";
+                return "❌ 错误：无法识别目标位置 '" + destination + "'。" +
+                       "请使用记忆位置名称、坐标格式(x y z)、预定义地点名称或玩家名称。" +
+                       "你也可以先用\"记住这里是我的[位置名]\"保存当前位置。";
             }
         }
         

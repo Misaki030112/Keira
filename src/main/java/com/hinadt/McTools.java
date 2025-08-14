@@ -33,11 +33,28 @@ public class McTools {
     @Tool(
             name = "list_items",
             description = """
-            列出 Minecraft 物品（用于让 AI 选择/联想）。返回数组，每个元素包含：
-            { "id": "minecraft:diamond_sword", "name": "Diamond Sword", "maxStack": 1 }。
-            可用参数：
-            - query：按注册ID或名称包含匹配过滤（可选）
-            - limit：最多返回多少条（默认50，范围1~200）
+            智能物品搜索工具：列出Minecraft中的所有可用物品，支持高级过滤和搜索功能。
+            
+            功能特性：
+            - 全物品库搜索：覆盖所有Minecraft原版物品和模组物品
+            - 智能匹配：支持英文名称、注册ID、中文别名的模糊搜索
+            - 高效过滤：可按关键词快速筛选相关物品
+            - 详细信息：返回物品ID、显示名称、最大堆叠数等详细数据
+            - 性能优化：支持限制返回数量避免信息过载
+            
+            返回格式：每个物品包含完整信息
+            { "id": "minecraft:diamond_sword", "name": "钻石剑", "maxStack": 1 }
+            
+            使用场景：
+            - AI理解玩家物品需求时的知识库查询
+            - 为give_item工具提供精确的物品选择
+            - 物品名称模糊匹配和智能推荐
+            - 验证物品是否存在于游戏中
+            
+            搜索技巧：
+            - 使用部分关键词："sword"匹配所有剑类
+            - 材料类型："diamond"匹配所有钻石制品
+            - 功能分类："food"匹配食物类物品
             """
     )
     public List<ItemInfo> listItems(
@@ -84,9 +101,9 @@ public class McTools {
             """
     )
     public String giveItem(
-            @ToolParam(description ="玩家名称或UUID（优先按名称找）") String player,
-            @ToolParam(description ="物品注册ID，例如 'minecraft:diamond_sword'") String itemId,
-            @ToolParam(description ="数量（1~640），会自动按最大叠加拆分") Integer count
+            @ToolParam(description ="目标玩家名称或UUID（优先按用户名查找，支持在线玩家实时定位）") String player,
+            @ToolParam(description ="精确的Minecraft物品注册ID，例如 'minecraft:diamond_sword'，建议先用list_items搜索") String itemId,
+            @ToolParam(description ="物品数量（1~640），系统会根据物品最大堆叠数自动智能分组") Integer count
     ) {
         int n = (count == null) ? 1 : Math.max(1, Math.min(640, count));
 
