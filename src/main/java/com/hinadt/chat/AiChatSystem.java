@@ -8,8 +8,10 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import com.mojang.brigadier.context.CommandContext;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,118 +56,199 @@ public class AiChatSystem {
     
     private static void registerCommands() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-            dispatcher.register(CommandManager.literal("ai")
-                .then(CommandManager.literal("chat")
-                    .executes(context -> {
-                        ServerPlayerEntity player = context.getSource().getPlayer();
-                        if (player == null) return 0;
-                        
-                        String playerName = player.getName().getString();
-                        // 检查用户名是否为AI助手名称
-                        if (isAiAssistantName(playerName)) {
-                            player.sendMessage(Text.of("§c[系统] 检测到AI助手身份，禁止进入AI聊天模式"));
-                            return 0;
-                        }
-                        
-                        if (aiChatPlayers.contains(playerName)) {
-                            player.sendMessage(Text.of("§c[Ausuka.Ai] 你已经在AI聊天模式中了！使用 /ai exit 退出"));
-                            return 0;
-                        }
-                        
-                        aiChatPlayers.add(playerName);
-                        player.sendMessage(Text.of("§b[Ausuka.Ai] §a✨ 欢迎进入AI聊天模式！"));
-                        player.sendMessage(Text.of("§b[Ausuka.Ai] §f现在你可以直接和我对话，我会理解你的需求并提供帮助"));
-                        player.sendMessage(Text.of("§b[Ausuka.Ai] §f使用 /ai exit 退出AI聊天模式"));
-                        
-                        // 发送AI欢迎消息
-                        sendAiWelcomeMessage(player);
-                        
-                        return 1;
-                    }))
-                .then(CommandManager.literal("exit")
-                    .executes(context -> {
-                        ServerPlayerEntity player = context.getSource().getPlayer();
-                        if (player == null) return 0;
-                        
-                        String playerName = player.getName().getString();
-                        if (!aiChatPlayers.contains(playerName)) {
-                            player.sendMessage(Text.of("§c[Ausuka.Ai] 你不在AI聊天模式中"));
-                            return 0;
-                        }
-                        
-                        aiChatPlayers.remove(playerName);
-                        player.sendMessage(Text.of("§b[Ausuka.Ai] §e👋 已退出AI聊天模式，期待下次交流！"));
-                        
-                        return 1;
-                    }))
+            // 使用 AiCommandStructure 进行结构化命令注册
+            dispatcher.register(CommandManager.literal(AiCommandStructure.MainCommand.AI.getCommand())
+                .then(CommandManager.literal(AiCommandStructure.AiSubCommand.CHAT.getCommand())
+                    .executes(context -> executeAiChatCommand(context)))
+                .then(CommandManager.literal(AiCommandStructure.AiSubCommand.EXIT.getCommand())
+                    .executes(context -> executeAiExitCommand(context)))
+                .then(CommandManager.literal(AiCommandStructure.AiSubCommand.NEW.getCommand())
+                    .executes(context -> executeAiNewCommand(context)))
                 .then(CommandManager.literal("help")
-                    .executes(context -> {
-                        ServerPlayerEntity player = context.getSource().getPlayer();
-                        if (player == null) return 0;
-                        
-                        sendHelpMessage(player);
-                        return 1;
-                    }))
+                    .executes(context -> executeHelpCommand(context)))
                 .then(CommandManager.literal("status")
-                    .executes(context -> {
-                        ServerPlayerEntity player = context.getSource().getPlayer();
-                        if (player == null) return 0;
-                        
-                        String playerName = player.getName().getString();
-                        boolean inAiChat = aiChatPlayers.contains(playerName);
-                        
-                        player.sendMessage(Text.of("§b[Ausuka.Ai] §f状态：" + 
-                            (inAiChat ? "§a在AI聊天模式中" : "§c不在AI聊天模式中")));
-                        
-                        return 1;
-                    }))
-                .then(CommandManager.literal("admin")
-                    .then(CommandManager.literal("auto-msg")
-                        .then(CommandManager.literal("toggle")
-                            .executes(context -> {
-                                ServerPlayerEntity player = context.getSource().getPlayer();
-                                if (player == null) return 0;
-                                
-                                if (!AdminTools.isPlayerAdmin(server, player)) {
-                                    player.sendMessage(Text.of("§c[Ausuka.Ai] 只有管理员才能控制自动消息系统"));
-                                    return 0;
-                                }
-                                
-                                boolean newState = !IntelligentAutoMessageSystem.isSystemEnabled();
-                                String result = IntelligentAutoMessageSystem.toggleAutoMessages(newState);
-                                player.sendMessage(Text.of("§b[Ausuka.Ai] " + result));
-                                
-                                return 1;
-                            }))
-                        .then(CommandManager.literal("status")
-                            .executes(context -> {
-                                ServerPlayerEntity player = context.getSource().getPlayer();
-                                if (player == null) return 0;
-                                
-                                boolean enabled = IntelligentAutoMessageSystem.isSystemEnabled();
-                                int playerCount = server.getPlayerManager().getPlayerList().size();
-                                
-                                player.sendMessage(Text.of("§b[Ausuka.Ai] 自动消息系统状态: " + 
-                                    (enabled ? "§a启用" : "§c禁用")));
-                                player.sendMessage(Text.of("§b[Ausuka.Ai] 当前在线玩家: " + playerCount));
-                                
-                                return 1;
-                            }))))
-                .then(CommandManager.literal("new")
-                    .executes(context -> {
-                        ServerPlayerEntity player = context.getSource().getPlayer();
-                        if (player == null) return 0;
-                        
-                        String playerName = player.getName().getString();
-                        String newSessionId = AiRuntime.getConversationMemory().startNewConversation(playerName);
-                        
-                        player.sendMessage(Text.of("§b[Ausuka.Ai] §a✨ 已开始新的对话会话！"));
-                        player.sendMessage(Text.of("§b[Ausuka.Ai] §f会话ID: " + newSessionId));
-                        player.sendMessage(Text.of("§b[Ausuka.Ai] §f现在我们可以进行全新的对话，我会记住这次对话的上下文。"));
-                        
-                        return 1;
-                    })));
+                    .executes(context -> executeStatusCommand(context)))
+                .then(CommandManager.literal(AiCommandStructure.AiSubCommand.ADMIN.getCommand())
+                    .executes(context -> executeAdminHelpCommand(context))
+                    .then(CommandManager.literal(AiCommandStructure.AdminSubCommand.AUTO_MSG.getCommand())
+                        .executes(context -> executeAdminAutoMsgHelpCommand(context))
+                        .then(CommandManager.literal(AiCommandStructure.AutoMsgSubCommand.TOGGLE.getCommand())
+                            .executes(context -> executeAdminAutoMsgToggleCommand(context)))
+                        .then(CommandManager.literal(AiCommandStructure.AutoMsgSubCommand.STATUS.getCommand())
+                            .executes(context -> executeAdminAutoMsgStatusCommand(context))))));
         });
+    }
+    
+    // 各个命令的执行方法，使用权限检查
+    private static int executeAiChatCommand(CommandContext<ServerCommandSource> context) {
+        ServerPlayerEntity player = context.getSource().getPlayer();
+        if (player == null) return 0;
+        
+        // 检查权限
+        if (!hasPermission(player, AiCommandStructure.AiSubCommand.CHAT.getRequiredPermission())) {
+            player.sendMessage(Text.of("§c[Ausuka.Ai] 权限不足"));
+            return 0;
+        }
+        
+        String playerName = player.getName().getString();
+        // 检查用户名是否为AI助手名称
+        if (isAiAssistantName(playerName)) {
+            player.sendMessage(Text.of("§c[系统] 检测到AI助手身份，禁止进入AI聊天模式"));
+            return 0;
+        }
+        
+        if (aiChatPlayers.contains(playerName)) {
+            player.sendMessage(Text.of("§c[Ausuka.Ai] 你已经在AI聊天模式中了！使用 /ai exit 退出"));
+            return 0;
+        }
+        
+        aiChatPlayers.add(playerName);
+        player.sendMessage(Text.of("§b[Ausuka.Ai] §a✨ 欢迎进入AI聊天模式！"));
+        player.sendMessage(Text.of("§b[Ausuka.Ai] §f现在你可以直接和我对话，我会理解你的需求并提供帮助"));
+        player.sendMessage(Text.of("§b[Ausuka.Ai] §f使用 /ai exit 退出AI聊天模式"));
+        
+        // 发送AI欢迎消息
+        sendAiWelcomeMessage(player);
+        
+        return 1;
+    }
+    
+    private static int executeAiExitCommand(CommandContext<ServerCommandSource> context) {
+        ServerPlayerEntity player = context.getSource().getPlayer();
+        if (player == null) return 0;
+        
+        String playerName = player.getName().getString();
+        if (!aiChatPlayers.contains(playerName)) {
+            player.sendMessage(Text.of("§c[Ausuka.Ai] 你不在AI聊天模式中"));
+            return 0;
+        }
+        
+        aiChatPlayers.remove(playerName);
+        player.sendMessage(Text.of("§b[Ausuka.Ai] §e👋 已退出AI聊天模式，期待下次交流！"));
+        
+        return 1;
+    }
+    
+    private static int executeAiNewCommand(CommandContext<ServerCommandSource> context) {
+        ServerPlayerEntity player = context.getSource().getPlayer();
+        if (player == null) return 0;
+        
+        String playerName = player.getName().getString();
+        String newSessionId = AiRuntime.getConversationMemory().startNewConversation(playerName);
+        
+        player.sendMessage(Text.of("§b[Ausuka.Ai] §a✨ 已开始新的对话会话！"));
+        player.sendMessage(Text.of("§b[Ausuka.Ai] §f会话ID: " + newSessionId));
+        player.sendMessage(Text.of("§b[Ausuka.Ai] §f现在我们可以进行全新的对话，我会记住这次对话的上下文。"));
+        
+        return 1;
+    }
+    
+    private static int executeHelpCommand(CommandContext<ServerCommandSource> context) {
+        ServerPlayerEntity player = context.getSource().getPlayer();
+        if (player == null) return 0;
+        
+        sendStructuredHelpMessage(player);
+        return 1;
+    }
+    
+    private static int executeStatusCommand(CommandContext<ServerCommandSource> context) {
+        ServerPlayerEntity player = context.getSource().getPlayer();
+        if (player == null) return 0;
+        
+        String playerName = player.getName().getString();
+        boolean inAiChat = aiChatPlayers.contains(playerName);
+        
+        player.sendMessage(Text.of("§b[Ausuka.Ai] §f状态：" + 
+            (inAiChat ? "§a在AI聊天模式中" : "§c不在AI聊天模式中")));
+        
+        return 1;
+    }
+    
+    private static int executeAdminHelpCommand(CommandContext<ServerCommandSource> context) {
+        ServerPlayerEntity player = context.getSource().getPlayer();
+        if (player == null) return 0;
+        
+        if (!hasPermission(player, AiCommandStructure.AiSubCommand.ADMIN.getRequiredPermission())) {
+            player.sendMessage(Text.of("§c[Ausuka.Ai] 只有管理员才能访问管理功能"));
+            return 0;
+        }
+        
+        String adminHelp = AiCommandStructure.HelpGenerator.generateAdminHelp();
+        String[] lines = adminHelp.split("\n");
+        for (String line : lines) {
+            player.sendMessage(Text.of(line));
+        }
+        
+        return 1;
+    }
+    
+    private static int executeAdminAutoMsgHelpCommand(CommandContext<ServerCommandSource> context) {
+        ServerPlayerEntity player = context.getSource().getPlayer();
+        if (player == null) return 0;
+        
+        if (!hasPermission(player, AiCommandStructure.AdminSubCommand.AUTO_MSG.getRequiredPermission())) {
+            player.sendMessage(Text.of("§c[Ausuka.Ai] 只有管理员才能控制自动消息系统"));
+            return 0;
+        }
+        
+        player.sendMessage(Text.of("§e=== 自动消息系统控制 ==="));
+        player.sendMessage(Text.of("§e/ai admin auto-msg toggle §7- 切换系统开关"));
+        player.sendMessage(Text.of("§e/ai admin auto-msg status §7- 查看系统状态"));
+        
+        return 1;
+    }
+    
+    private static int executeAdminAutoMsgToggleCommand(CommandContext<ServerCommandSource> context) {
+        ServerPlayerEntity player = context.getSource().getPlayer();
+        if (player == null) return 0;
+        
+        if (!hasPermission(player, AiCommandStructure.AutoMsgSubCommand.TOGGLE.getRequiredPermission())) {
+            player.sendMessage(Text.of("§c[Ausuka.Ai] 只有管理员才能控制自动消息系统"));
+            return 0;
+        }
+        
+        boolean newState = !IntelligentAutoMessageSystem.isSystemEnabled();
+        String result = IntelligentAutoMessageSystem.toggleAutoMessages(newState);
+        player.sendMessage(Text.of("§b[Ausuka.Ai] " + result));
+        
+        return 1;
+    }
+    
+    private static int executeAdminAutoMsgStatusCommand(CommandContext<ServerCommandSource> context) {
+        ServerPlayerEntity player = context.getSource().getPlayer();
+        if (player == null) return 0;
+        
+        if (!hasPermission(player, AiCommandStructure.AutoMsgSubCommand.STATUS.getRequiredPermission())) {
+            player.sendMessage(Text.of("§c[Ausuka.Ai] 只有管理员才能查看自动消息系统状态"));
+            return 0;
+        }
+        
+        boolean enabled = IntelligentAutoMessageSystem.isSystemEnabled();
+        int playerCount = server.getPlayerManager().getPlayerList().size();
+        
+        player.sendMessage(Text.of("§b[Ausuka.Ai] 自动消息系统状态: " + 
+            (enabled ? "§a启用" : "§c禁用")));
+        player.sendMessage(Text.of("§b[Ausuka.Ai] 当前在线玩家: " + playerCount));
+        
+        return 1;
+    }
+    
+    /**
+     * 检查玩家是否具有指定权限
+     */
+    private static boolean hasPermission(ServerPlayerEntity player, AiCommandStructure.Permission requiredPermission) {
+        AiCommandStructure.Permission playerPermission = getPlayerPermission(player);
+        return playerPermission.hasPermission(requiredPermission);
+    }
+    
+    /**
+     * 获取玩家的权限级别
+     */
+    private static AiCommandStructure.Permission getPlayerPermission(ServerPlayerEntity player) {
+        if (AdminTools.isPlayerAdmin(server, player)) {
+            return AiCommandStructure.Permission.ADMIN;
+        }
+        return AiCommandStructure.Permission.USER;
     }
     
     private static void registerChatListener() {
@@ -295,23 +378,17 @@ public class AiChatSystem {
         });
     }
     
-    private static void sendHelpMessage(ServerPlayerEntity player) {
-        boolean isAdmin = AdminTools.isPlayerAdmin(server, player);
+    private static void sendStructuredHelpMessage(ServerPlayerEntity player) {
+        AiCommandStructure.Permission playerPermission = getPlayerPermission(player);
+        String helpText = AiCommandStructure.HelpGenerator.generateContextualHelp(playerPermission);
         
-        player.sendMessage(Text.of(""));
-        player.sendMessage(Text.of("§b=== Ausuka.Ai 助手命令 ==="));
-        player.sendMessage(Text.of("§f/ai chat   §7- 进入AI聊天模式"));
-        player.sendMessage(Text.of("§f/ai exit   §7- 退出AI聊天模式"));
-        player.sendMessage(Text.of("§f/ai new    §7- 开始新的对话会话（清除对话记忆）"));
-        player.sendMessage(Text.of("§f/ai help   §7- 显示此帮助信息"));
-        player.sendMessage(Text.of("§f/ai status §7- 查看当前状态"));
-        
-        if (isAdmin) {
-            player.sendMessage(Text.of("§c=== 管理员专用命令 ==="));
-            player.sendMessage(Text.of("§f/ai admin auto-msg toggle §7- 切换自动消息系统"));
-            player.sendMessage(Text.of("§f/ai admin auto-msg status §7- 查看自动消息系统状态"));
+        // 分行发送帮助信息
+        String[] lines = helpText.split("\n");
+        for (String line : lines) {
+            player.sendMessage(Text.of(line));
         }
         
+        // 添加额外的功能介绍
         player.sendMessage(Text.of(""));
         player.sendMessage(Text.of("§b=== AI聊天模式功能 ==="));
         player.sendMessage(Text.of("§a🎒 智能物品管理 §7- \"我想要钻石剑\" / \"帮我整理背包\""));
@@ -323,7 +400,7 @@ public class AiChatSystem {
         player.sendMessage(Text.of("§a🔍 环境分析 §7- \"分析周围环境\" / \"寻找钻石\""));
         player.sendMessage(Text.of("§a💬 对话记忆 §7- AI会记住整个对话过程和上下文"));
         
-        if (isAdmin) {
+        if (playerPermission.hasPermission(AiCommandStructure.Permission.ADMIN)) {
             player.sendMessage(Text.of("§c🛡️ 管理员功能 §7- 服务器管理、权限控制、系统设置"));
         }
         
