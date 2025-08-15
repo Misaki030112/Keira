@@ -3,8 +3,10 @@ package com.hinadt.mixin;
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
 import net.minecraft.network.ClientConnection;
+import com.hinadt.tools.Messages;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.network.ConnectedClientData;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -15,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class PlayerJoinMixin {
     
     @Inject(method = "onPlayerConnect", at = @At("TAIL"))
-    private void onPlayerJoin(ClientConnection connection, ServerPlayerEntity player, CallbackInfo ci) {
+    private void onPlayerJoin(ClientConnection connection, ServerPlayerEntity player, ConnectedClientData clientData, CallbackInfo ci) {
         // 延迟发送AI生成的欢迎消息
         player.getServer().execute(() -> {
             try {
@@ -50,15 +52,20 @@ public class PlayerJoinMixin {
                 - 让玩家感到兴奋和好奇
                 """, playerName);
             
-            String welcomeMessage = AiRuntime.AIClient
-                .prompt()
-                .user(welcomePrompt)
-                .call()
-                .content();
+            String welcomeMessage;
+            if (!AiRuntime.isReady()) {
+                throw new IllegalStateException("AI未配置");
+            }
+
+            welcomeMessage = AiRuntime.AIClient
+                    .prompt()
+                    .user(welcomePrompt)
+                    .call()
+                    .content();
             
             // 发送AI生成的欢迎消息
-            player.sendMessage(Text.of("§b🤖 [Ausuka.ai] §f" + welcomeMessage));
-            player.sendMessage(Text.of("§e💡 输入 §a/ai help §e查看完整功能列表！"));
+            Messages.to(player, Text.of("§b🤖 [Ausuka.ai] §f" + welcomeMessage));
+            Messages.to(player, Text.of("§e💡 输入 §a/ai help §e查看完整功能列表！"));
             
             AusukaAiMod.LOGGER.info("已为玩家 {} 发送AI生成的欢迎消息", playerName);
             
@@ -77,7 +84,7 @@ public class PlayerJoinMixin {
                 输入 /ai help 开始体验AI驱动的游戏助手！
                 """, player.getName().getString());
             
-            player.sendMessage(Text.of("§b🤖 [Ausuka.ai] §f" + fallbackMessage));
+            Messages.to(player, Text.of("§b🤖 [Ausuka.ai] §f" + fallbackMessage));
             
             AusukaAiMod.LOGGER.warn("AI欢迎消息生成失败，使用备用消息: " + e.getMessage());
         }

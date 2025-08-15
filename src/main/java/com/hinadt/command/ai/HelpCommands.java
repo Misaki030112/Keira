@@ -7,6 +7,7 @@ import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import com.hinadt.tools.Messages;
 
 public final class HelpCommands {
     private HelpCommands() {}
@@ -38,19 +39,19 @@ public final class HelpCommands {
             "§7使用 /ai <子命令> 获取详细帮助§r"
         ));
 
-        player.sendMessage(Text.of(""));
-        player.sendMessage(Text.of("§b=== AI聊天模式功能 ==="));
-        player.sendMessage(Text.of("§a🎒 智能物品管理 §7- \"我想要钻石剑\" / \"帮我整理背包\""));
-        player.sendMessage(Text.of("§a🚀 智能传送系统 §7- \"带我回家\" / \"记住这里是我的农场\""));
-        player.sendMessage(Text.of("§a🧠 AI记忆系统 §7- \"记住我喜欢现代建筑风格\""));
-        player.sendMessage(Text.of("§a🏗️ 建筑助手 §7- \"帮我设计一个城堡\""));
-        player.sendMessage(Text.of("§a🌤️ 环境控制 §7- \"我想要晴天\" / \"设置为白天\""));
-        player.sendMessage(Text.of("§a❤️ 玩家服务 §7- \"治疗我\" / \"查看玩家信息\""));
-        player.sendMessage(Text.of("§a🔍 环境分析 §7- \"分析周围环境\" / \"寻找钻石\""));
-        player.sendMessage(Text.of("§a💬 对话记忆 §7- AI会记住整个对话过程和上下文"));
+        Messages.to(player, Text.of(""));
+        Messages.to(player, Text.of("§b=== AI聊天模式功能 ==="));
+        Messages.to(player, Text.of("§a🎒 智能物品管理 §7- \"我想要钻石剑\" / \"帮我整理背包\""));
+        Messages.to(player, Text.of("§a🚀 智能传送系统 §7- \"带我回家\" / \"记住这里是我的农场\""));
+        Messages.to(player, Text.of("§a🧠 AI记忆系统 §7- \"记住我喜欢现代建筑风格\""));
+        Messages.to(player, Text.of("§a🏗️ 建筑助手 §7- \"帮我设计一个城堡\""));
+        Messages.to(player, Text.of("§a🌤️ 环境控制 §7- \"我想要晴天\" / \"设置为白天\""));
+        Messages.to(player, Text.of("§a❤️ 玩家服务 §7- \"治疗我\" / \"查看玩家信息\""));
+        Messages.to(player, Text.of("§a🔍 环境分析 §7- \"分析周围环境\" / \"寻找钻石\""));
+        Messages.to(player, Text.of("§a💬 对话记忆 §7- AI会记住整个对话过程和上下文"));
 
         if (perm.hasPermission(ModAdminSystem.PermissionLevel.MOD_ADMIN)) {
-            player.sendMessage(Text.of(""));
+            Messages.to(player, Text.of(""));
             sendMultiline(player, String.join("\n",
                 "§c=== 管理员专用命令 ===§r",
                 "§c/ai admin auto-msg toggle§r - 切换自动消息系统开关",
@@ -59,12 +60,12 @@ public final class HelpCommands {
             ));
         }
 
-        player.sendMessage(Text.of(""));
-        player.sendMessage(Text.of("§e💡 提示：在AI聊天模式中，直接说出你的需求，AI会自动理解并提供帮助！"));
-        player.sendMessage(Text.of("§e🔄 使用 /ai new 开始新对话可以清除之前的对话记忆"));
+        Messages.to(player, Text.of(""));
+        Messages.to(player, Text.of("§e💡 提示：在AI聊天模式中，直接说出你的需求，AI会自动理解并提供帮助！"));
+        Messages.to(player, Text.of("§e🔄 使用 /ai new 开始新对话可以清除之前的对话记忆"));
     }
 
     private static void sendMultiline(ServerPlayerEntity player, String text) {
-        for (String line : text.split("\n")) player.sendMessage(Text.of(line));
+        for (String line : text.split("\n")) Messages.to(player, Text.of(line));
     }
 }

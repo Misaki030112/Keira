@@ -27,5 +27,13 @@ Ausuka.ai is a Fabric mod that brings an AI chat assistant to Minecraft. Use nat
 
 ## Install & Config
 - Requires Fabric Loader, Fabric API, Java 21.
-- Set `DEEPSEEK_API_KEY` env var.
+- Provide an API key via one of the following (priority order):
+  1) JVM arg: `-DDEEPSEEK_API_KEY=...`
+  2) Env var: `DEEPSEEK_API_KEY=...`
+  3) Config file: create `<.minecraft>/config/ausuka-ai-mod.properties` with:
+     - `DEEPSEEK_API_KEY=your_key_here`
+     - Optional: `AI_PROVIDER=deepseek`
+
+- Windows (single-player): using a config file is recommended because the Minecraft Launcher may not pass env vars to the game. Create `%APPDATA%/.minecraft/config/ausuka-ai-mod.properties` and put your key there.
+
 - Drop the built jar into `mods/` and launch.

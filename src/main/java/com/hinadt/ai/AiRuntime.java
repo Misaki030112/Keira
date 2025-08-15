@@ -8,6 +8,8 @@ import org.springframework.ai.deepseek.api.DeepSeekApi;
 import com.hinadt.AusukaAiMod;
 import net.minecraft.server.MinecraftServer;
 import com.hinadt.persistence.MyBatisSupport;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * AI运行时系统 - 支持多种AI模型提供商
@@ -17,6 +19,8 @@ public final class AiRuntime {
     public static ChatClient AIClient;
     private static ConversationMemorySystem conversationMemory;
     private static ModAdminSystem modAdminSystem;
+    // Dedicated pool for AI work to avoid ForkJoin common pool starvation
+    public static ExecutorService AI_EXECUTOR;
     
     /**
      * 支持的AI提供商类型
@@ -40,16 +44,28 @@ public final class AiRuntime {
     }
 
     public static void init() {
+        // 预加载配置
+        AiConfig.load();
+
         // 自动检测可用的AI提供商
         AiProvider selectedProvider = detectAvailableProvider();
         ChatModel model = createChatModel(selectedProvider);
-        
+
         if (model == null) {
-            AusukaAiMod.LOGGER.error("无法初始化任何AI模型！请检查API密钥配置");
-            throw new RuntimeException("AI模型初始化失败 - 未找到有效的API密钥");
+            AusukaAiMod.LOGGER.warn("未能初始化AI模型，AI功能将被禁用。请在环境变量、JVM参数或配置文件中提供API密钥。");
+        } else {
+            AIClient = ChatClient.builder(model).build();
         }
-        
-        AIClient = ChatClient.builder(model).build();
+
+        // Init a small, named thread pool for AI work
+        if (AI_EXECUTOR == null || AI_EXECUTOR.isShutdown()) {
+            AI_EXECUTOR = Executors.newFixedThreadPool(4, r -> {
+                Thread t = new Thread(r);
+                t.setName("ausuka-ai-worker");
+                t.setDaemon(true);
+                return t;
+            });
+        }
 
         // 初始化持久层（建表等）并初始化对话记忆系统
         MyBatisSupport.init();
@@ -57,7 +73,11 @@ public final class AiRuntime {
         
         // ModAdminSystem 需要MinecraftServer，将在第一次访问时延迟初始化
         
-        AusukaAiMod.LOGGER.info("AI运行时初始化完成，使用提供商: {}", selectedProvider.getName());
+        if (AIClient != null) {
+            AusukaAiMod.LOGGER.info("AI运行时初始化完成，使用提供商: {}", selectedProvider.getName());
+        } else {
+            AusukaAiMod.LOGGER.info("AI运行时初始化完成（AI未启用）");
+        }
     }
     
     /**
@@ -65,15 +85,27 @@ public final class AiRuntime {
      * 按优先级顺序检查环境变量
      */
     private static AiProvider detectAvailableProvider() {
+        // 首先尊重显式配置
+        String preferred = AiConfig.getPreferredProvider();
+        if (preferred != null) {
+            for (AiProvider p : AiProvider.values()) {
+                if (p.getName().equalsIgnoreCase(preferred)) {
+                    AusukaAiMod.LOGGER.info("配置指定AI提供商: {}", p.getName());
+                    return p;
+                }
+            }
+            AusukaAiMod.LOGGER.warn("未知AI_PROVIDER='{}'，将自动检测", preferred);
+        }
+
         // 按优先级检查
         for (AiProvider provider : AiProvider.values()) {
-            String apiKey = System.getenv(provider.getEnvKeyName());
+            String apiKey = AiConfig.get(provider.getEnvKeyName());
             if (apiKey != null && !apiKey.trim().isEmpty()) {
                 AusukaAiMod.LOGGER.info("检测到 {} API密钥，将使用此提供商", provider.getName());
                 return provider;
             }
         }
-        
+
         AusukaAiMod.LOGGER.warn("未检测到任何AI提供商的API密钥！");
         return AiProvider.DEEPSEEK; // 默认回退
     }
@@ -82,8 +114,8 @@ public final class AiRuntime {
      * 根据提供商类型创建ChatModel
      */
     private static ChatModel createChatModel(AiProvider provider) {
-        String apiKey = System.getenv(provider.getEnvKeyName());
-        
+        String apiKey = AiConfig.get(provider.getEnvKeyName());
+
         if (apiKey == null || apiKey.trim().isEmpty()) {
             AusukaAiMod.LOGGER.warn("提供商 {} 的API密钥未设置", provider.getName());
             return null;
@@ -98,13 +130,13 @@ public final class AiRuntime {
                     // TODO: 添加OpenAI支持
                     // return createOpenAiModel(apiKey);
                     AusukaAiMod.LOGGER.warn("OpenAI支持尚未实现，回退到DeepSeek");
-                    return createDeepSeekModel(System.getenv("DEEPSEEK_API_KEY"));
+                    return createDeepSeekModel(AiConfig.get("DEEPSEEK_API_KEY"));
                     
                 case CLAUDE:
                     // TODO: 添加Claude支持
                     // return createClaudeModel(apiKey);
                     AusukaAiMod.LOGGER.warn("Claude支持尚未实现，回退到DeepSeek");
-                    return createDeepSeekModel(System.getenv("DEEPSEEK_API_KEY"));
+                    return createDeepSeekModel(AiConfig.get("DEEPSEEK_API_KEY"));
                     
                 default:
                     AusukaAiMod.LOGGER.warn("未知的AI提供商: {}", provider.getName());
@@ -179,6 +211,10 @@ public final class AiRuntime {
      * 关闭AI运行时
      */
     public static void shutdown() {
+        if (AI_EXECUTOR != null) {
+            AI_EXECUTOR.shutdownNow();
+            AI_EXECUTOR = null;
+        }
         if (conversationMemory != null) {
             conversationMemory.shutdown();
         }
@@ -186,5 +222,12 @@ public final class AiRuntime {
             // ModAdminSystem doesn't need shutdown, it uses shared connection
             modAdminSystem = null;
         }
+    }
+
+    /**
+     * 是否可用（是否已初始化AI Client）
+     */
+    public static boolean isReady() {
+        return AIClient != null;
     }
 }

@@ -6,6 +6,7 @@ import com.hinadt.command.core.AiServices;
 import com.hinadt.tools.AdminTools;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import com.hinadt.tools.Messages;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -89,7 +90,7 @@ public final class ChatHelpers {
                     .call()
                     .content();
 
-                AiServices.server().execute(() -> player.sendMessage(Text.of("§b[Ausuka.ai] §f" + welcome)));
+                AiServices.server().execute(() -> Messages.to(player, Text.of("§b[Ausuka.ai] §f" + welcome)));
 
             } catch (Exception e) {
                 AusukaAiMod.LOGGER.error("生成AI欢迎消息时出错", e);
@@ -97,7 +98,7 @@ public final class ChatHelpers {
                     String fallbackWelcome = "🤖 你好 " + player.getName().getString() + "！我是AI助手 Ausuka.ai，" +
                         "可以帮助你管理物品、智能传送、记忆重要位置、建筑指导等。" +
                         "直接告诉我你需要什么帮助，我会智能理解并为你服务！✨";
-                    player.sendMessage(Text.of("§b[Ausuka.ai] §f" + fallbackWelcome));
+                    Messages.to(player, Text.of("§b[Ausuka.ai] §f" + fallbackWelcome));
                 });
             }
         });

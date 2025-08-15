@@ -29,6 +29,9 @@ public class AiWorkflowManager {
 
     public String processPlayerMessage(ServerPlayerEntity player, String message) {
         try {
+            if (!AiRuntime.isReady()) {
+                return "⚠️ AI未配置或不可用。请配置 API 密钥后重试。";
+            }
             String playerName = player.getName().getString();
 
             // 记录用户消息
@@ -47,15 +50,27 @@ public class AiWorkflowManager {
             String serverContext = buildServerContext();
             String toolAvailability = buildToolAvailability(isAdmin);
 
-            // 提示词
-            String prompt = promptComposer.compose(
-                    player, message, detailedContext, conversationContext,
-                    permissionContext, isAdmin, memoryContext, serverContext, toolAvailability);
+            // 组装系统提示词（进入system role），用户原文进入user role
+            String systemPrompt = promptComposer.composeSystemPrompt(
+                    player,
+                    detailedContext,
+                    conversationContext,
+                    permissionContext,
+                    isAdmin,
+                    memoryContext,
+                    serverContext,
+                    toolAvailability
+            );
 
-            // 一次性 AI 调用 + 工具注册
+            // 服务器端日志：记录请求开始与耗时，方便排查“给我一把钻石剑”等慢请求
+            long start = System.currentTimeMillis();
+            AusukaAiMod.LOGGER.info("AI请求开始: 玩家={}, 内容='{}'", playerName, message);
+
+            // 一次性 AI 调用 + 工具注册（正确区分 system / user）
             String aiResponse = AiRuntime.AIClient
                     .prompt()
-                    .user(prompt)
+                    .system(systemPrompt)
+                    .user(message)
                     .tools(
                             tools.mcTools,
                             tools.teleportTools,
@@ -67,6 +82,13 @@ public class AiWorkflowManager {
                     )
                     .call()
                     .content();
+
+            long cost = System.currentTimeMillis() - start;
+            if (cost > 8000) {
+                AusukaAiMod.LOGGER.warn("AI请求完成(慢): 玩家={}, 耗时={}ms", playerName, cost);
+            } else {
+                AusukaAiMod.LOGGER.info("AI请求完成: 玩家={}, 耗时={}ms", playerName, cost);
+            }
 
             memorySystem.saveAiResponse(playerName, aiResponse);
             return aiResponse;

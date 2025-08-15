@@ -18,4 +18,7 @@ public interface ChatSessionMapper {
 
     @Delete("DELETE FROM ai_chat_sessions WHERE updated_at < DATEADD('HOUR', -#{hours}, CURRENT_TIMESTAMP)")
     int deleteOlderThan(@Param("hours") int hours);
+
+    @Delete("DELETE FROM ai_chat_sessions WHERE player_name = #{playerName}")
+    int delete(@Param("playerName") String playerName);
 }

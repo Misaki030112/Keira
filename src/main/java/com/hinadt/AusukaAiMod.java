@@ -2,15 +2,19 @@ package com.hinadt;
 
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.chat.AiChatSystem;
+import com.hinadt.tools.Messages;
 import com.hinadt.command.AiCommandRegistry;
 import com.hinadt.command.core.AiServices;
 import com.hinadt.chat.IntelligentAutoMessageSystem;
 import net.fabricmc.api.ModInitializer;
+import com.hinadt.command.core.DatabaseAiChatSessionStore;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import net.minecraft.text.Text;
 
+@SuppressWarnings("resource")
 public class AusukaAiMod implements ModInitializer {
     public static final String MOD_ID = "ausuka-ai-mod";
 
@@ -27,6 +31,14 @@ public class AusukaAiMod implements ModInitializer {
 
         LOGGER.info("🤖 Ausuka.ai Mod 正在加载中...");
 
+        // Register commands early so Brigadier has them when server builds the tree
+        try {
+            AiCommandRegistry.initialize();
+            LOGGER.info("✅ 命令注册回调已挂载");
+        } catch (Exception e) {
+            LOGGER.error("❌ 命令注册初始化失败", e);
+        }
+
 		// Initialize AI when server starts
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			LOGGER.info("🚀 服务器启动，正在初始化AI驱动系统...");
@@ -38,11 +50,10 @@ public class AusukaAiMod implements ModInitializer {
                 // 初始化服务容器与AI聊天系统（监听等）
                 AiServices.initialize(server);
                 AiChatSystem.initialize();
-                AiCommandRegistry.initialize();
                 LOGGER.info("✅ AI聊天系统与命令注册完成");
 
                 // 清理过期的会话状态（7天）
-                int cleaned = com.hinadt.command.core.DatabaseAiChatSessionStore.cleanupOldEntriesHours(24 * 7);
+                int cleaned = DatabaseAiChatSessionStore.cleanupOldEntriesHours(24 * 7);
                 LOGGER.info("🧹 已清理过期聊天会话记录: {} 条", cleaned);
 				
 				// 初始化智能自动消息系统
@@ -52,12 +63,12 @@ public class AusukaAiMod implements ModInitializer {
 				LOGGER.info("🎉 Ausuka.ai Mod 系统初始化完成！");
 				
 				// 发送启动欢迎消息
-				server.execute(() -> {
-					server.getPlayerManager().broadcast(
-						net.minecraft.text.Text.of("§b🤖 [Ausuka.ai] §a系统上线！输入 §f/ai help §a查看功能"), 
-						false
-					);
-				});
+                server.execute(() ->
+                    Messages.broadcast(
+                        server,
+                        Text.of("§b🤖 [Ausuka.ai] §a系统上线！输入 §f/ai help §a查看功能")
+                    )
+                );
 				
 			} catch (Exception e) {
 				LOGGER.error("❌ AI系统初始化失败: " + e.getMessage(), e);

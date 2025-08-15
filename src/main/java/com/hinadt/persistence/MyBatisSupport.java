@@ -34,6 +34,12 @@ public final class MyBatisSupport {
             try (Reader reader = Resources.getResourceAsReader("mybatis-config.xml")) {
                 factory = new SqlSessionFactoryBuilder().build(reader);
             }
+            // Log DB absolute path for troubleshooting
+            try {
+                java.nio.file.Path dbFile = java.nio.file.Paths.get("./config/ausuka-ai/conversations.mv.db").toAbsolutePath();
+                AusukaAiMod.LOGGER.info("H2 数据库已初始化: {}", dbFile);
+            } catch (Exception ignored) {}
+
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("初始化 MyBatis 失败", e);
             throw new RuntimeException(e);

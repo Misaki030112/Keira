@@ -2,6 +2,7 @@ package com.hinadt.ai.context;
 
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.World;
 import net.minecraft.util.math.BlockPos;
 
 public class PlayerContextBuilder {
@@ -41,9 +42,9 @@ public class PlayerContextBuilder {
 
         // 安全性
         context.append("\n**周围环境**:\n");
-        if (player.getWorld().getRegistryKey() == net.minecraft.world.World.NETHER) {
+        if (player.getWorld().getRegistryKey() == World.NETHER) {
             context.append("- ⚠️ 下界环境：危险，注意岩浆和敌对生物\n");
-        } else if (player.getWorld().getRegistryKey() == net.minecraft.world.World.END) {
+        } else if (player.getWorld().getRegistryKey() == World.END) {
             context.append("- ⚠️ 末地环境：极度危险，注意末影龙和虚空\n");
         } else {
             boolean isDangerous = timeOfDay > 13000 && timeOfDay < 23000;
@@ -85,10 +86,9 @@ public class PlayerContextBuilder {
     }
 
     private String getWorldDisplayName(ServerWorld world) {
-        if (world.getRegistryKey() == net.minecraft.world.World.OVERWORLD) return "主世界";
-        if (world.getRegistryKey() == net.minecraft.world.World.NETHER) return "下界";
-        if (world.getRegistryKey() == net.minecraft.world.World.END) return "末地";
+        if (world.getRegistryKey() == World.OVERWORLD) return "主世界";
+        if (world.getRegistryKey() == World.NETHER) return "下界";
+        if (world.getRegistryKey() == World.END) return "末地";
         return world.getRegistryKey().getValue().toString();
     }
 }
-

@@ -44,4 +44,14 @@ public class DatabaseAiChatSessionStore implements AiChatSessionStore {
             return mapper.deleteOlderThan(hours);
         }
     }
+
+    /**
+     * 删除指定玩家的会话记录（用于玩家下线时彻底清理）
+     */
+    public static int deleteForPlayer(String playerName) {
+        try (var session = MyBatisSupport.getFactory().openSession(true)) {
+            ChatSessionMapper mapper = session.getMapper(ChatSessionMapper.class);
+            return mapper.delete(playerName);
+        }
+    }
 }

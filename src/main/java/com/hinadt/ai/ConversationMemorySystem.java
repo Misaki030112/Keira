@@ -43,10 +43,20 @@ public class ConversationMemorySystem {
         StringBuilder context = new StringBuilder();
         context.append("## 对话历史上下文 ##\n");
         for (ConversationRecord record : history) {
-            context.append(String.format("[%s] %s: %s\n", 
-                record.timestamp.toString().substring(11, 19), // 只显示时间部分
-                record.messageType.equals("USER") ? "玩家" : "AI",
-                record.content));
+            String role;
+            if ("USER".equalsIgnoreCase(record.messageType)) {
+                role = "玩家";
+            } else if ("AI".equalsIgnoreCase(record.messageType)) {
+                role = "AI";
+            } else if ("SYSTEM".equalsIgnoreCase(record.messageType)) {
+                role = "系统";
+            } else {
+                role = record.messageType;
+            }
+            context.append(String.format("[%s] %s: %s\n",
+                    record.timestamp.toString().substring(11, 19), // 只显示时间部分
+                    role,
+                    record.content));
         }
         context.append("## 当前对话 ##\n");
         
@@ -95,19 +105,24 @@ public class ConversationMemorySystem {
      * 获取当前会话ID
      */
     public String getCurrentSessionId(String playerName) {
-        return playerSessions.computeIfAbsent(playerName, k -> {
-            // 尝试从数据库获取最近的会话ID
-            try (var session = MyBatisSupport.getFactory().openSession()) {
-                ConversationMapper mapper = session.getMapper(ConversationMapper.class);
-                String latest = mapper.getLatestSessionId(playerName);
-                if (latest != null) return latest;
-            } catch (Exception e) {
-                AusukaAiMod.LOGGER.error("获取会话ID失败", e);
+        // Fast path: already cached
+        String cached = playerSessions.get(playerName);
+        if (cached != null) return cached;
+
+        // Try load latest from DB
+        try (var session = MyBatisSupport.getFactory().openSession()) {
+            ConversationMapper mapper = session.getMapper(ConversationMapper.class);
+            String latest = mapper.getLatestSessionId(playerName);
+            if (latest != null) {
+                playerSessions.putIfAbsent(playerName, latest);
+                return latest;
             }
-            
-            // 创建新会话
-            return startNewConversation(playerName);
-        });
+        } catch (Exception e) {
+            AusukaAiMod.LOGGER.error("获取会话ID失败", e);
+        }
+
+        // Fallback: create a new session (also updates map and cache appropriately)
+        return startNewConversation(playerName);
     }
     
     /**
@@ -121,12 +136,19 @@ public class ConversationMemorySystem {
             ConversationMapper mapper = session.getMapper(ConversationMapper.class);
             var rows = mapper.getRecent(playerName, sessionId, limit);
             for (var r : rows) {
+                // 兼容大小写/别名差异，避免NPE
+                String type = toTextOrDefault(r, "message_type", "USER");
+                String content = toTextOrDefault(r, "content", "");
+                String ctx = toTextOrDefault(r, "context_data", "{}");
+
+                LocalDateTime ts = extractTimestamp(r);
+
                 records.add(new ConversationRecord(
-                    sessionId,
-                    (String) r.get("message_type"),
-                    (String) r.get("content"),
-                    ((java.sql.Timestamp) r.get("timestamp")).toLocalDateTime(),
-                    (String) r.get("context_data")
+                        sessionId,
+                        type,
+                        content,
+                        ts,
+                        ctx
                 ));
             }
             java.util.Collections.reverse(records);
@@ -166,6 +188,14 @@ public class ConversationMemorySystem {
      * 关闭数据库连接
      */
     public void shutdown() { /* Managed by pool, nothing to do */ }
+
+    /**
+     * 清理指定玩家的会话状态与缓存（玩家下线时调用）
+     */
+    public void clearSession(String playerName) {
+        playerSessions.remove(playerName);
+        conversationCache.remove(playerName);
+    }
     
     // 不再暴露底层连接
     
@@ -187,6 +217,56 @@ public class ConversationMemorySystem {
             this.timestamp = timestamp;
             this.contextData = contextData;
         }
+    }
+
+    // ----- helpers -----
+    private static String strOrDefault(Map<String, Object> row, String key, String def) {
+        Object v = row.get(key);
+        if (v == null) v = row.get(key.toUpperCase());
+        return v == null ? def : String.valueOf(v);
+    }
+
+    private static String toTextOrDefault(Map<String, Object> row, String key, String def) {
+        Object v = row.get(key);
+        if (v == null) v = row.get(key.toUpperCase());
+        return toText(v, def);
+    }
+
+    private static String toText(Object v, String def) {
+        if (v == null) return def;
+        try {
+            if (v instanceof java.sql.Clob clob) {
+                long len = clob.length();
+                if (len <= 0) return "";
+                return clob.getSubString(1, (int) Math.min(len, Integer.MAX_VALUE));
+            }
+            if (v instanceof java.sql.NClob nclob) {
+                long len = nclob.length();
+                if (len <= 0) return "";
+                return nclob.getSubString(1, (int) Math.min(len, Integer.MAX_VALUE));
+            }
+            return String.valueOf(v);
+        } catch (Exception e) {
+            return String.valueOf(v);
+        }
+    }
+
+    private static LocalDateTime extractTimestamp(Map<String, Object> row) {
+        // 优先使用标准键名，其次使用大写，若仍为空则回退到当前时间
+        Object v = row.get("timestamp");
+        if (v == null) v = row.get("TIMESTAMP");
+        // 兼容可能的别名
+        if (v == null) v = row.get("created_at");
+        if (v == null) v = row.get("CREATED_AT");
+
+        if (v instanceof java.sql.Timestamp ts) {
+            return ts.toLocalDateTime();
+        }
+        if (v instanceof java.time.LocalDateTime ldt) {
+            return ldt;
+        }
+        // 兜底：避免NPE导致聊天流程中断
+        return LocalDateTime.now();
     }
     
     /**
