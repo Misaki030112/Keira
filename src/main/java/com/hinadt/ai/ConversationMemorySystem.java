@@ -8,16 +8,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
 
 /**
- * 简化的会话记忆管理系统
- * 使用嵌入式H2数据库存储对话历史
- * 提供对话上下文管理和搜索功能
+ * 基于H2数据库的对话记忆系统
+ * 提供持久化的对话上下文存储和检索功能
+ * 数据存储在 ./config/ausuka-ai/ 目录下
  */
 public class ConversationMemorySystem {
     
-    private static final String DB_URL = "jdbc:h2:./ai_conversations;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1";
-    private static final String DB_USER = "sa";
+    // 数据库配置 - 存储在MOD配置目录下
+    private static final String DB_DIR = "./config/ausuka-ai/";
+    private static final String DB_URL = "jdbc:h2:" + DB_DIR + "conversations;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1";
+    private static final String DB_USER = "ausuka";
     private static final String DB_PASSWORD = "";
     
     // 每个玩家的会话ID
@@ -36,28 +39,31 @@ public class ConversationMemorySystem {
      */
     private void initializeDatabase() {
         try {
+            // 确保数据库目录存在
+            java.io.File dbDir = new java.io.File(DB_DIR);
+            if (!dbDir.exists()) {
+                boolean created = dbDir.mkdirs();
+                if (created) {
+                    AiMisakiMod.LOGGER.info("创建数据库目录: {}", DB_DIR);
+                }
+            }
+            
             // 加载H2驱动
             Class.forName("org.h2.Driver");
             connection = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
             
-            // 创建表结构
-            String createTableSQL = """
-                CREATE TABLE IF NOT EXISTS conversations (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    player_name VARCHAR(255) NOT NULL,
-                    session_id VARCHAR(255) NOT NULL,
-                    message_type VARCHAR(50) NOT NULL,
-                    message_content TEXT NOT NULL,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    context_data TEXT,
-                    INDEX idx_player_session (player_name, session_id),
-                    INDEX idx_timestamp (timestamp)
-                )
-                """;
+            // 使用SQL文件创建表结构
+            String initSql = SqlQueryLoader.loadSqlFile("init.sql");
+            String[] statements = initSql.split(";");
             
             try (Statement stmt = connection.createStatement()) {
-                stmt.execute(createTableSQL);
-                AiMisakiMod.LOGGER.info("对话记忆数据库初始化完成");
+                for (String sql : statements) {
+                    sql = sql.trim();
+                    if (!sql.isEmpty()) {
+                        stmt.execute(sql);
+                    }
+                }
+                AiMisakiMod.LOGGER.info("对话记忆数据库初始化完成，数据存储位置: {}", new java.io.File(DB_DIR).getAbsolutePath());
             }
             
         } catch (Exception e) {
@@ -113,16 +119,15 @@ public class ConversationMemorySystem {
      * 开始新的对话会话
      */
     public String startNewConversation(String playerName) {
-        String newSessionId = playerName + "_" + System.currentTimeMillis();
+        String newSessionId = UUID.randomUUID().toString().substring(0, 8);
         playerSessions.put(playerName, newSessionId);
         
-        // 清空缓存
+        // 清除缓存
         conversationCache.remove(playerName);
         
-        // 记录新会话开始
-        saveMessage(playerName, newSessionId, "SYSTEM", "开始新对话会话", "{}");
+        // 保存会话开始标记
+        saveMessage(playerName, newSessionId, "SYSTEM", "新对话会话开始", "{}");
         
-        AiMisakiMod.LOGGER.info("玩家 {} 开始新对话会话: {}", playerName, newSessionId);
         return newSessionId;
     }
     
@@ -130,78 +135,78 @@ public class ConversationMemorySystem {
      * 获取当前会话ID
      */
     public String getCurrentSessionId(String playerName) {
-        return playerSessions.computeIfAbsent(playerName, k -> 
-            playerName + "_" + System.currentTimeMillis());
+        return playerSessions.computeIfAbsent(playerName, k -> {
+            // 尝试从数据库获取最近的会话ID
+            try (PreparedStatement stmt = connection.prepareStatement(
+                SqlQueryLoader.getQuery("conversations.sql", "获取玩家当前会话ID"))) {
+                
+                stmt.setString(1, playerName);
+                ResultSet rs = stmt.executeQuery();
+                
+                if (rs.next()) {
+                    return rs.getString("session_id");
+                }
+            } catch (SQLException e) {
+                AiMisakiMod.LOGGER.error("获取会话ID失败", e);
+            }
+            
+            // 创建新会话
+            return startNewConversation(playerName);
+        });
     }
     
     /**
      * 获取最近的对话记录
      */
     private List<ConversationRecord> getRecentConversation(String playerName, int limit) {
-        // 先从缓存获取
-        List<ConversationRecord> cached = conversationCache.get(playerName);
-        if (cached != null && cached.size() >= limit) {
-            int startIndex = Math.max(0, cached.size() - limit);
-            return cached.subList(startIndex, cached.size());
-        }
-        
-        // 从数据库获取
         String sessionId = getCurrentSessionId(playerName);
-        String sql = """
-            SELECT message_type, message_content, timestamp, context_data
-            FROM conversations 
-            WHERE player_name = ? AND session_id = ? AND message_type IN ('USER', 'AI')
-            ORDER BY timestamp ASC 
-            LIMIT ?
-            """;
+        List<ConversationRecord> records = new ArrayList<>();
         
-        List<ConversationRecord> results = new ArrayList<>();
-        
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+            SqlQueryLoader.getQuery("conversations.sql", "获取玩家最近的对话记录"))) {
+            
             stmt.setString(1, playerName);
             stmt.setString(2, sessionId);
             stmt.setInt(3, limit);
             
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    ConversationRecord record = new ConversationRecord(
-                        sessionId,
-                        rs.getString("message_type"),
-                        rs.getString("message_content"),
-                        rs.getTimestamp("timestamp").toLocalDateTime(),
-                        rs.getString("context_data")
-                    );
-                    results.add(record);
-                }
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                records.add(new ConversationRecord(
+                    rs.getString("session_id"),
+                    rs.getString("message_type"),
+                    rs.getString("message_content"),
+                    rs.getTimestamp("timestamp").toLocalDateTime(),
+                    rs.getString("context_data")
+                ));
             }
+            
+            // 反转顺序，最新的在后面
+            java.util.Collections.reverse(records);
+            
         } catch (SQLException e) {
-            AiMisakiMod.LOGGER.error("获取对话历史失败: " + playerName, e);
+            AiMisakiMod.LOGGER.error("获取对话记录失败", e);
         }
         
-        // 更新缓存
-        conversationCache.put(playerName, new ArrayList<>(results));
-        
-        return results;
+        return records;
     }
     
     /**
      * 保存消息到数据库
      */
     private void saveMessage(String playerName, String sessionId, String messageType, String content, String contextData) {
-        String sql = """
-            INSERT INTO conversations (player_name, session_id, message_type, message_content, context_data) 
-            VALUES (?, ?, ?, ?, ?)
-            """;
-        
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+            SqlQueryLoader.getQuery("conversations.sql", "保存对话记录"))) {
+            
             stmt.setString(1, playerName);
             stmt.setString(2, sessionId);
             stmt.setString(3, messageType);
             stmt.setString(4, content);
-            stmt.setString(5, contextData != null ? contextData : "{}");
+            stmt.setString(5, contextData);
+            
             stmt.executeUpdate();
+            
         } catch (SQLException e) {
-            AiMisakiMod.LOGGER.error("保存对话消息失败", e);
+            AiMisakiMod.LOGGER.error("保存对话记录失败", e);
         }
     }
     
@@ -211,97 +216,52 @@ public class ConversationMemorySystem {
     private void updateCache(String playerName, ConversationRecord record) {
         conversationCache.computeIfAbsent(playerName, k -> new ArrayList<>()).add(record);
         
-        // 限制缓存大小
+        // 保持缓存大小
         List<ConversationRecord> cache = conversationCache.get(playerName);
-        if (cache.size() > 20) {
-            cache.remove(0); // 移除最旧的记录
+        if (cache.size() > 50) {
+            cache.remove(0);
         }
     }
     
     /**
-     * 搜索相关对话历史
+     * 清理过期的对话记录
      */
-    public List<ConversationRecord> searchConversations(String playerName, String keyword, int limit) {
-        String sql = """
-            SELECT session_id, message_type, message_content, timestamp, context_data
-            FROM conversations 
-            WHERE player_name = ? AND message_content LIKE ? 
-            ORDER BY timestamp DESC 
-            LIMIT ?
-            """;
-        
-        List<ConversationRecord> results = new ArrayList<>();
-        
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, playerName);
-            stmt.setString(2, "%" + keyword + "%");
-            stmt.setInt(3, limit);
+    public void cleanupOldConversations(int daysToKeep) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+            SqlQueryLoader.getQuery("conversations.sql", "删除过期的对话记录"))) {
             
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    ConversationRecord record = new ConversationRecord(
-                        rs.getString("session_id"),
-                        rs.getString("message_type"),
-                        rs.getString("message_content"),
-                        rs.getTimestamp("timestamp").toLocalDateTime(),
-                        rs.getString("context_data")
-                    );
-                    results.add(record);
-                }
+            stmt.setInt(1, daysToKeep);
+            int deleted = stmt.executeUpdate();
+            
+            if (deleted > 0) {
+                AiMisakiMod.LOGGER.info("清理了 {} 条过期对话记录", deleted);
             }
+            
         } catch (SQLException e) {
-            AiMisakiMod.LOGGER.error("搜索对话历史失败", e);
+            AiMisakiMod.LOGGER.error("清理过期对话记录失败", e);
         }
-        
-        return results;
     }
     
     /**
-     * 获取玩家的会话统计
+     * 获取对话统计信息
      */
-    public ConversationStats getPlayerStats(String playerName) {
-        String sql = """
-            SELECT 
-                COUNT(*) as total_messages,
-                COUNT(DISTINCT session_id) as total_sessions,
-                MAX(timestamp) as last_activity
-            FROM conversations 
-            WHERE player_name = ?
-            """;
-        
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, playerName);
+    public String getConversationStats() {
+        try (PreparedStatement stmt = connection.prepareStatement(
+            SqlQueryLoader.getQuery("conversations.sql", "获取对话统计信息"))) {
             
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return new ConversationStats(
-                        rs.getInt("total_messages"),
-                        rs.getInt("total_sessions"),
-                        rs.getTimestamp("last_activity") != null ? 
-                            rs.getTimestamp("last_activity").toLocalDateTime() : null
-                    );
-                }
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return String.format("总消息数: %d, 活跃玩家: %d, 对话会话: %d",
+                    rs.getInt("total_messages"),
+                    rs.getInt("unique_players"), 
+                    rs.getInt("total_sessions"));
             }
+            
         } catch (SQLException e) {
             AiMisakiMod.LOGGER.error("获取对话统计失败", e);
         }
         
-        return new ConversationStats(0, 0, null);
-    }
-    
-    /**
-     * 清理旧的对话记录
-     */
-    public void cleanupOldConversations(int daysToKeep) {
-        String sql = "DELETE FROM conversations WHERE timestamp < DATEADD('DAY', ?, CURRENT_TIMESTAMP)";
-        
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setInt(1, -daysToKeep);
-            int deleted = stmt.executeUpdate();
-            AiMisakiMod.LOGGER.info("清理了 {} 条旧对话记录", deleted);
-        } catch (SQLException e) {
-            AiMisakiMod.LOGGER.error("清理旧对话记录失败", e);
-        }
+        return "统计信息获取失败";
     }
     
     /**
@@ -311,13 +271,16 @@ public class ConversationMemorySystem {
         try {
             if (connection != null && !connection.isClosed()) {
                 connection.close();
+                AiMisakiMod.LOGGER.info("对话记忆数据库连接已关闭");
             }
         } catch (SQLException e) {
-            AiMisakiMod.LOGGER.error("关闭对话记忆数据库失败", e);
+            AiMisakiMod.LOGGER.error("关闭数据库连接失败", e);
         }
     }
     
-    // 数据类
+    /**
+     * 对话记录数据类
+     */
     public static class ConversationRecord {
         public final String sessionId;
         public final String messageType;
@@ -332,18 +295,6 @@ public class ConversationMemorySystem {
             this.content = content;
             this.timestamp = timestamp;
             this.contextData = contextData;
-        }
-    }
-    
-    public static class ConversationStats {
-        public final int totalMessages;
-        public final int totalSessions;
-        public final LocalDateTime lastActivity;
-        
-        public ConversationStats(int totalMessages, int totalSessions, LocalDateTime lastActivity) {
-            this.totalMessages = totalMessages;
-            this.totalSessions = totalSessions;
-            this.lastActivity = lastActivity;
         }
     }
 }

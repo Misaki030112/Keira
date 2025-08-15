@@ -111,7 +111,7 @@ public class AiWorkflowManager {
         return String.format("""
             # AI Misaki 智能助手 - Minecraft服务器AI伴侣
             
-            你是一个高度智能的Minecraft AI助手，名叫Misaki。你的任务是理解玩家需求并使用合适的工具来帮助他们。
+            你是一个高度智能的Minecraft AI助手，名叫Ausuka.Ai。你的任务是理解玩家需求并使用合适的工具来帮助他们。
             
             %s
             
