@@ -1,6 +1,6 @@
 package com.hinadt.tools;
 
-import com.hinadt.AiMisakiMod;
+import com.hinadt.AusukaAiMod;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -58,14 +58,14 @@ public class PlayerStatsTools {
         runOnMainAndWait(() -> {
             StringBuilder info = new StringBuilder();
             info.append("📊 玩家信息：").append(player.getName().getString()).append("\n");
-            info.append("🌍 世界：").append(getWorldDisplayName(player.getServerWorld())).append("\n");
+            info.append("🌍 世界：").append(getWorldDisplayName(player.getWorld())).append("\n");
             info.append("📍 坐标：(").append(player.getBlockPos().getX())
                 .append(", ").append(player.getBlockPos().getY())
                 .append(", ").append(player.getBlockPos().getZ()).append(")\n");
             info.append("❤️ 生命值：").append((int)player.getHealth()).append("/20\n");
             info.append("🍗 饥饿值：").append(player.getHungerManager().getFoodLevel()).append("/20\n");
             info.append("⭐ 经验等级：").append(player.experienceLevel).append("\n");
-            info.append("🎮 游戏模式：").append(player.interactionManager.getGameMode().getName()).append("\n");
+            info.append("🎮 游戏模式：").append(player.interactionManager.getGameMode().getTranslatableName().getString()).append("\n");
             
             result.set(info.toString());
         });
@@ -116,13 +116,13 @@ public class PlayerStatsTools {
                 player.clearStatusEffects();
                 
                 String message = "✅ 已治疗玩家 " + player.getName().getString() + "（生命值和饥饿值已恢复满值）";
-                player.sendMessage(Text.of("§b[AI Misaki] §f" + message));
+                player.sendMessage(Text.of("§b[Ausuka.ai] §f" + message));
                 result.set(message);
                 
             } catch (Exception e) {
                 String errorMsg = "❌ 治疗失败：" + e.getMessage();
                 result.set(errorMsg);
-                AiMisakiMod.LOGGER.error("治疗玩家时出错", e);
+                AusukaAiMod.LOGGER.error("治疗玩家时出错", e);
             }
         });
         
@@ -168,7 +168,7 @@ public class PlayerStatsTools {
             
             for (ServerPlayerEntity player : players) {
                 info.append("• ").append(player.getName().getString())
-                    .append(" - ").append(getWorldDisplayName(player.getServerWorld()))
+                    .append(" - ").append(getWorldDisplayName(player.getWorld()))
                     .append(" (").append(player.getBlockPos().getX())
                     .append(", ").append(player.getBlockPos().getY())
                     .append(", ").append(player.getBlockPos().getZ()).append(")")
@@ -190,7 +190,7 @@ public class PlayerStatsTools {
         功能特性：
         - 私密性：只有目标玩家能看到消息
         - 即时性：消息立即传递给在线玩家
-        - 身份标识：消息显示为来自AI Misaki
+        - 身份标识：消息显示为来自 Ausuka.ai
         - 格式美观：使用特殊颜色和格式突出显示
         - 状态反馈：确认消息发送成功或失败
         
@@ -217,13 +217,13 @@ public class PlayerStatsTools {
         
         runOnMainAndWait(() -> {
             try {
-                player.sendMessage(Text.of("§e[AI Misaki 私信] §f" + message));
+                player.sendMessage(Text.of("§e[Ausuka.ai 私信] §f" + message));
                 result.set("✅ 已向 " + targetPlayer + " 发送私信：" + message);
                 
             } catch (Exception e) {
                 String errorMsg = "❌ 发送消息失败：" + e.getMessage();
                 result.set(errorMsg);
-                AiMisakiMod.LOGGER.error("发送消息时出错", e);
+                AusukaAiMod.LOGGER.error("发送消息时出错", e);
             }
         });
         

@@ -1,6 +1,6 @@
 package com.hinadt.tools;
 
-import com.hinadt.AiMisakiMod;
+import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.ai.ConversationMemorySystem;
 import net.minecraft.server.MinecraftServer;
@@ -86,7 +86,7 @@ public class MemoryTools {
                     locationName, finalDescription, pos.getX(), pos.getY(), pos.getZ(), worldName));
                 
             } catch (Exception e) {
-                AiMisakiMod.LOGGER.error("保存位置记忆失败", e);
+                AusukaAiMod.LOGGER.error("保存位置记忆失败", e);
                 result.set("❌ 保存位置记忆时发生错误: " + e.getMessage());
             } finally {
                 latch.countDown();
@@ -142,7 +142,7 @@ public class MemoryTools {
                 location.name, location.world, location.x, location.y, location.z, location.description);
                 
         } catch (Exception e) {
-            AiMisakiMod.LOGGER.error("获取位置记忆失败", e);
+            AusukaAiMod.LOGGER.error("获取位置记忆失败", e);
             return "❌ 获取位置记忆时发生错误: " + e.getMessage();
         }
     }
@@ -190,7 +190,7 @@ public class MemoryTools {
             return result.toString();
             
         } catch (Exception e) {
-            AiMisakiMod.LOGGER.error("列出位置记忆失败", e);
+            AusukaAiMod.LOGGER.error("列出位置记忆失败", e);
             return "❌ 获取位置记忆列表时发生错误: " + e.getMessage();
         }
     }
@@ -225,7 +225,7 @@ public class MemoryTools {
             }
             
         } catch (Exception e) {
-            AiMisakiMod.LOGGER.error("删除位置记忆失败", e);
+            AusukaAiMod.LOGGER.error("删除位置记忆失败", e);
             return "❌ 删除位置记忆时发生错误: " + e.getMessage();
         }
     }

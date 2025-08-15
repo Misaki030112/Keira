@@ -1,9 +1,9 @@
 {
 	"schemaVersion": 1,
-	"id": "ai-misaki-mod",
+    "id": "ausuka-ai-mod",
 	"version": "${version}",
-	"name": "AI Misaki Mod",
-	"description": "AI-powered Minecraft mod with intelligent chat responses, item giving, teleportation, and building assistance features. 一个AI驱动的MC模组，支持智能聊天、物品给予、传送和建筑辅助等功能。",
+    "name": "Ausuka.ai (Fabric Mod)",
+	"description": "Ausuka.ai — AI-powered Minecraft Fabric mod for intelligent chat, item giving, teleportation, and building assistance. 提供智能聊天、物品、传送与建筑辅助的AI模组。",
 	"authors": [
 		"Misaki030112"
 	],
@@ -12,23 +12,19 @@
 		"sources": "https://github.com/Misaki030112/mc-ai-mod"
 	},
 	"license": "MIT",
-	"icon": "assets/ai-misaki-mod/icon.png",
+    "icon": "assets/ausuka-ai-mod/icon.png",
 	"environment": "*",
 	"entrypoints": {
-		"main": [
-			"com.hinadt.AiMisakiMod"
-		],
-		"client": [
-			"com.hinadt.AiMisakiModClient"
-		]
+        "main": [
+            "com.hinadt.AusukaAiMod"
+        ],
+        "client": [
+            "com.hinadt.AusukaAiModClient"
+        ]
 	},
-	"mixins": [
-		"ai-misaki-mod.mixins.json",
-		{
-			"config": "ai-misaki-mod.client.mixins.json",
-			"environment": "client"
-		}
-	],
+    "mixins": [
+        "ausuka-ai-mod.mixins.json"
+    ],
 	"depends": {
 		"fabricloader": ">=0.16.14",
 		"minecraft": "~1.21.1",

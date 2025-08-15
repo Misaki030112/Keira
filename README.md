@@ -1,63 +1,31 @@
-# AI Misaki Mod
+# Ausuka.ai (Fabric Mod)
 
-一个智能的 Minecraft Fabric 模组，集成 AI 助手功能，支持智能聊天、物品管理、传送、建筑辅助等功能。
+---
 
-## 🌟 主要特性
+## Overview
+Ausuka.ai is a Fabric mod that brings an AI chat assistant to Minecraft. Use natural language to get items, teleport, control environment, or ask for contextual tips. It supports i18n, admin controls, and persistent storage.
 
-- **🤖 AI 智能聊天**：基于 DeepSeek 模型的智能对话系统
-- **📦 智能物品给予**：语音识别物品请求并自动给予
-- **🚀 传送功能**：支持坐标、地点名称和玩家传送
-- **🏗️ 建筑辅助**：提供建造建议和材料清单
-- **🌤️ 天气控制**：AI 控制天气变化
-- **🕐 时间控制**：智能时间管理
+## Highlights
+- Smart chat and one-shot Q&A: `/ai chat`, `/ai say <message>`.
+- Conversation and memory: `/ai new` resets context; conversations and locations are persisted.
+- Auto messages: scheduled broadcast and personal tips (admin-controllable).
+- Admin commands: `/ai admin auto-msg ...`, `/ai admin stats` for system stats.
+- Unified permissions: USER / MOD_ADMIN / SERVER_ADMIN (OP/SP is SERVER_ADMIN).
+- DB-backed sessions: AI chat mode state survives restarts.
+- I18N: auto language selection (zh_cn / en_us).
 
-## 🚀 快速开始
+## Quick Start
+- Basics: `/ai help`, `/ai chat`, `/ai say <message>`, `/ai exit`, `/ai new`, `/ai status`.
+- Admin: `/ai admin auto-msg toggle|status|personal <player> <on|off>`, `/ai admin stats`.
 
-### 环境要求
-- Minecraft 1.21.1
-- Fabric Loader 0.16.14+
-- Java 21+
-- Fabric API
+## Tech Stack
+- Fabric 1.21.1, Java 21.
+- Spring AI Client Chat + DeepSeek (single-call + tool calls).
+- MyBatis 3 + H2 (persistent sessions, conversations, and locations).
+- Async handling with main-thread dispatch for safety.
+- Mod ID: `ausuka-ai-mod`
 
-### 安装步骤
-1. 安装 Fabric Loader 和 Fabric API
-2. 设置环境变量 `DEEPSEEK_API_KEY`
-3. 将模组文件放入 `mods` 文件夹
-4. 启动游戏并享受 AI 助手功能
-
-## 📖 使用说明
-
-### 基础命令
-- `帮助` - 显示功能列表
-- `给我 [物品名]` - 获得指定物品
-- `我要去 [地点]` - 传送到指定位置
-- `帮我建造 [建筑]` - 获得建造建议
-- `天气 [类型]` - 改变天气
-- `时间 [类型]` - 改变时间
-
-### 示例
-```
-给我钻石剑
-我要去出生点
-帮我建造城堡
-天气晴天
-时间白天
-```
-
-## 🛠️ 开发
-
-### 构建项目
-```bash
-./gradlew build
-```
-
-### 运行开发环境
-```bash
-./gradlew runClient
-```
-
-详细的功能说明和使用教程请查看 [完整文档](README_MOD.md)。
-
-## 📄 许可证
-
-本项目基于 MIT 许可证开源 - 查看 [LICENSE](LICENSE) 文件了解详情。
+## Install & Config
+- Requires Fabric Loader, Fabric API, Java 21.
+- Set `DEEPSEEK_API_KEY` env var.
+- Drop the built jar into `mods/` and launch.

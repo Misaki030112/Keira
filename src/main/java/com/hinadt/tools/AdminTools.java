@@ -6,6 +6,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -238,15 +239,15 @@ public class AdminTools {
                 }
                 
                 Vec3d destPos = destinationPlayer.getPos();
-                targetPlayer.teleport(destPos.x, destPos.y, destPos.z);
+                targetPlayer.teleport(targetPlayer.getWorld(), destPos.x, destPos.y, destPos.z, java.util.Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
                 
                 targetPlayer.sendMessage(Text.of("§e[管理] 你被传送到 " + targetLocation + " 身边"));
                 
                 return String.format("✅ 已将 %s 传送到 %s 身边", targetPlayerName, targetLocation);
                 
             } else if (x != null && y != null && z != null) {
-                // 传送到指定坐标
-                targetPlayer.teleport(x, y, z);
+                // 传送到指定坐标（同世界）
+                targetPlayer.teleport(targetPlayer.getWorld(), x, y, z, java.util.Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
                 
                 targetPlayer.sendMessage(Text.of(String.format("§e[管理] 你被传送到坐标 (%.1f, %.1f, %.1f)", x, y, z)));
                 
@@ -301,8 +302,8 @@ public class AdminTools {
             
             jailedPlayers.put(targetPlayerName, new JailInfo(originalPos, reason));
             
-            // 传送到监狱
-            targetPlayer.teleport(jailPos.x, jailPos.y, jailPos.z);
+            // 传送到监狱（同世界）
+            targetPlayer.teleport(targetPlayer.getWorld(), jailPos.x, jailPos.y, jailPos.z, java.util.Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
             
             String jailReason = reason != null ? reason : "违反服务器规则";
             targetPlayer.sendMessage(Text.of("§c[系统] 你已被监禁：" + jailReason));
@@ -315,9 +316,9 @@ public class AdminTools {
                 return "❌ 玩家 " + targetPlayerName + " 不在监狱中";
             }
             
-            // 传送回原位置
+            // 传送回原位置（同世界）
             Vec3d originalPos = jailInfo.originalPosition;
-            targetPlayer.teleport(originalPos.x, originalPos.y, originalPos.z);
+            targetPlayer.teleport(targetPlayer.getWorld(), originalPos.x, originalPos.y, originalPos.z, java.util.Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
             
             targetPlayer.sendMessage(Text.of("§a[系统] 你已被释放，请遵守服务器规则"));
             
@@ -376,20 +377,6 @@ public class AdminTools {
         }
         
         return status.toString();
-    }
-    
-    /**
-     * 检查玩家是否被冻结（供其他系统调用）
-     */
-    public static boolean isPlayerFrozen(String playerName) {
-        return frozenPlayers.containsKey(playerName);
-    }
-    
-    /**
-     * 检查玩家是否被监禁（供其他系统调用）
-     */
-    public static boolean isPlayerJailed(String playerName) {
-        return jailedPlayers.containsKey(playerName);
     }
     
     /**

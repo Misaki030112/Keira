@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+    <environments default="h2">
+        <environment id="h2">
+            <transactionManager type="JDBC"/>
+            <dataSource type="POOLED">
+                <property name="driver" value="org.h2.Driver"/>
+                <property name="url" value="jdbc:h2:./config/ausuka-ai/conversations;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1"/>
+                <property name="username" value="ausuka"/>
+                <property name="password" value=""/>
+            </dataSource>
+        </environment>
+    </environments>
+
+    <mappers>
+        <mapper class="com.hinadt.persistence.mapper.ConversationMapper"/>
+        <mapper class="com.hinadt.persistence.mapper.LocationMapper"/>
+        <mapper class="com.hinadt.persistence.mapper.ModAdminMapper"/>
+        <mapper class="com.hinadt.persistence.mapper.ChatSessionMapper"/>
+    </mappers>
+</configuration>
+

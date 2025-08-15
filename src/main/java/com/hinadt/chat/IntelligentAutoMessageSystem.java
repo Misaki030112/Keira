@@ -1,6 +1,6 @@
 package com.hinadt.chat;
 
-import com.hinadt.AiMisakiMod;
+import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -49,7 +49,7 @@ public class IntelligentAutoMessageSystem {
             TimeUnit.MINUTES
         );
         
-        AiMisakiMod.LOGGER.info("智能自动消息系统已启动！");
+        AusukaAiMod.LOGGER.info("智能自动消息系统已启动！");
     }
     
     public static void shutdown() {
@@ -97,13 +97,13 @@ public class IntelligentAutoMessageSystem {
             
             server.execute(() -> {
                 server.getPlayerManager().broadcast(
-                    Text.of("§d[AI Misaki 💭] §f" + message), 
+                    Text.of("§d[Ausuka.ai 💭] §f" + message), 
                     false
                 );
             });
             
         } catch (Exception e) {
-            AiMisakiMod.LOGGER.error("生成AI广播消息时出错", e);
+            AusukaAiMod.LOGGER.error("生成AI广播消息时出错", e);
         }
     }
     
@@ -158,11 +158,11 @@ public class IntelligentAutoMessageSystem {
                     .content();
                 
                 server.execute(() -> {
-                    player.sendMessage(Text.of("§e[AI Misaki 💡] §f" + message));
+                    player.sendMessage(Text.of("§e[Ausuka.ai 💡] §f" + message));
                 });
                 
             } catch (Exception e) {
-                AiMisakiMod.LOGGER.error("生成个性化消息时出错: " + playerName, e);
+                AusukaAiMod.LOGGER.error("生成个性化消息时出错: " + playerName, e);
             }
         });
     }
@@ -190,13 +190,13 @@ public class IntelligentAutoMessageSystem {
         
         // 玩家分布信息
         long playersInOverworld = server.getPlayerManager().getPlayerList().stream()
-            .filter(p -> p.getServerWorld().getRegistryKey() == net.minecraft.world.World.OVERWORLD)
+            .filter(p -> p.getWorld().getRegistryKey() == net.minecraft.world.World.OVERWORLD)
             .count();
         long playersInNether = server.getPlayerManager().getPlayerList().stream()
-            .filter(p -> p.getServerWorld().getRegistryKey() == net.minecraft.world.World.NETHER)
+            .filter(p -> p.getWorld().getRegistryKey() == net.minecraft.world.World.NETHER)
             .count();
         long playersInEnd = server.getPlayerManager().getPlayerList().stream()
-            .filter(p -> p.getServerWorld().getRegistryKey() == net.minecraft.world.World.END)
+            .filter(p -> p.getWorld().getRegistryKey() == net.minecraft.world.World.END)
             .count();
             
         context.append(String.format("玩家分布 - 主世界:%d, 下界:%d, 末地:%d", 
@@ -213,7 +213,7 @@ public class IntelligentAutoMessageSystem {
         
         // 基本信息
         BlockPos pos = player.getBlockPos();
-        String worldName = getWorldDisplayName(player.getServerWorld());
+        String worldName = getWorldDisplayName(player.getWorld());
         context.append(String.format("位置: (%d, %d, %d) 在%s\n", 
             pos.getX(), pos.getY(), pos.getZ(), worldName));
         
@@ -235,7 +235,7 @@ public class IntelligentAutoMessageSystem {
         
         // 生物群系（如果可获取）
         try {
-            var biome = player.getServerWorld().getBiome(pos);
+            var biome = player.getWorld().getBiome(pos);
             context.append("生物群系: ").append(biome.getKey().map(k -> k.getValue().getPath()).orElse("未知")).append("\n");
         } catch (Exception ignored) {}
         

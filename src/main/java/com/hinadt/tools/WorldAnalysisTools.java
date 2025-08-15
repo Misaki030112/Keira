@@ -1,6 +1,6 @@
 package com.hinadt.tools;
 
-import com.hinadt.AiMisakiMod;
+import com.hinadt.AusukaAiMod;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
@@ -78,7 +78,7 @@ public class WorldAnalysisTools {
             try {
                 StringBuilder analysis = new StringBuilder();
                 BlockPos playerPos = player.getBlockPos();
-                ServerWorld world = player.getServerWorld();
+                ServerWorld world = player.getWorld();
                 
                 analysis.append("🔍 ").append(playerName).append(" 的环境分析：\n");
                 
@@ -126,7 +126,7 @@ public class WorldAnalysisTools {
                 
             } catch (Exception e) {
                 result.set("❌ 分析环境时出错：" + e.getMessage());
-                AiMisakiMod.LOGGER.error("分析环境时出错", e);
+                AusukaAiMod.LOGGER.error("分析环境时出错", e);
             }
         });
         
@@ -157,7 +157,7 @@ public class WorldAnalysisTools {
         runOnMainAndWait(() -> {
             try {
                 BlockPos playerPos = player.getBlockPos();
-                ServerWorld world = player.getServerWorld();
+                ServerWorld world = player.getWorld();
                 
                 List<BlockPos> foundPositions = searchForResources(world, playerPos, searchRadius, resourceType);
                 
@@ -185,7 +185,7 @@ public class WorldAnalysisTools {
                 
             } catch (Exception e) {
                 result.set("❌ 搜索资源时出错：" + e.getMessage());
-                AiMisakiMod.LOGGER.error("搜索资源时出错", e);
+                AusukaAiMod.LOGGER.error("搜索资源时出错", e);
             }
         });
         

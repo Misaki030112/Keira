@@ -1,6 +1,6 @@
 package com.hinadt.tools;
 
-import com.hinadt.AiMisakiMod;
+import com.hinadt.AusukaAiMod;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -136,7 +136,7 @@ public class McTools {
                     given += take;
                 } else {
                     // 背包放不下：从空中掉落
-                    var world = target.getServerWorld();
+                    var world = target.getWorld();
                     var drop = target.dropItem(stack, false);
                     if (drop != null) {
                         drop.setPosition(target.getX(), target.getY() + 5.0, target.getZ()); // 天上掉下来

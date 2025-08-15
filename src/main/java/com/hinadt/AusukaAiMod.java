@@ -2,6 +2,8 @@ package com.hinadt;
 
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.chat.AiChatSystem;
+import com.hinadt.command.AiCommandRegistry;
+import com.hinadt.command.core.AiServices;
 import com.hinadt.chat.IntelligentAutoMessageSystem;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -9,8 +11,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class AiMisakiMod implements ModInitializer {
-	public static final String MOD_ID = "ai-misaki-mod";
+public class AusukaAiMod implements ModInitializer {
+    public static final String MOD_ID = "ausuka-ai-mod";
 
 	// This logger is used to write text to the console and the log file.
 	// It is considered best practice to use your mod id as the logger's name.
@@ -23,7 +25,7 @@ public class AiMisakiMod implements ModInitializer {
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.
 
-		LOGGER.info("🤖 AI Misaki Mod 正在加载中...");
+        LOGGER.info("🤖 Ausuka.ai Mod 正在加载中...");
 
 		// Initialize AI when server starts
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
@@ -33,20 +35,26 @@ public class AiMisakiMod implements ModInitializer {
 				AiRuntime.init();
 				LOGGER.info("✅ AI运行时初始化完成");
 				
-				// 初始化AI聊天命令系统
-				AiChatSystem.initialize(server);
-				LOGGER.info("✅ AI聊天系统初始化完成");
+                // 初始化服务容器与AI聊天系统（监听等）
+                AiServices.initialize(server);
+                AiChatSystem.initialize();
+                AiCommandRegistry.initialize();
+                LOGGER.info("✅ AI聊天系统与命令注册完成");
+
+                // 清理过期的会话状态（7天）
+                int cleaned = com.hinadt.command.core.DatabaseAiChatSessionStore.cleanupOldEntriesHours(24 * 7);
+                LOGGER.info("🧹 已清理过期聊天会话记录: {} 条", cleaned);
 				
 				// 初始化智能自动消息系统
 				IntelligentAutoMessageSystem.initialize(server);
 				LOGGER.info("✅ 智能自动消息系统初始化完成");
 				
-				LOGGER.info("🎉 AI Misaki Mod 系统初始化完成！");
+				LOGGER.info("🎉 Ausuka.ai Mod 系统初始化完成！");
 				
 				// 发送启动欢迎消息
 				server.execute(() -> {
 					server.getPlayerManager().broadcast(
-						net.minecraft.text.Text.of("§b🤖 [AI Misaki] §a系统上线！输入 §f/ai help §a查看功能"), 
+						net.minecraft.text.Text.of("§b🤖 [Ausuka.ai] §a系统上线！输入 §f/ai help §a查看功能"), 
 						false
 					);
 				});
@@ -64,6 +72,6 @@ public class AiMisakiMod implements ModInitializer {
 			LOGGER.info("✅ AI系统清理完成");
 		});
 
-		LOGGER.info("✨ AI Misaki Mod 加载完成！");
+		LOGGER.info("✨ Ausuka.ai Mod 加载完成！");
 	}
 }

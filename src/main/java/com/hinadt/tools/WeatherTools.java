@@ -1,6 +1,6 @@
 package com.hinadt.tools;
 
-import com.hinadt.AiMisakiMod;
+import com.hinadt.AusukaAiMod;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -97,14 +97,14 @@ public class WeatherTools {
                 // 广播天气变更消息
                 String worldName = getWorldDisplayName(finalTargetWorld);
                 server.getPlayerManager().broadcast(
-                    Text.of("[AI Misaki] " + result.get() + " (世界: " + worldName + ")"), 
+                    Text.of("[Ausuka.ai] " + result.get() + " (世界: " + worldName + ")"), 
                     false
                 );
                 
             } catch (Exception e) {
                 String errorMsg = "天气变更失败：" + e.getMessage();
                 result.set(errorMsg);
-                AiMisakiMod.LOGGER.error("变更天气时出错", e);
+                AusukaAiMod.LOGGER.error("变更天气时出错", e);
             }
         });
         
@@ -151,14 +151,14 @@ public class WeatherTools {
                 
                 // 广播时间变更消息
                 server.getPlayerManager().broadcast(
-                    Text.of("[AI Misaki] " + result.get()), 
+                    Text.of("[Ausuka.ai] " + result.get()), 
                     false
                 );
                 
             } catch (Exception e) {
                 String errorMsg = "时间设置失败：" + e.getMessage();
                 result.set(errorMsg);
-                AiMisakiMod.LOGGER.error("设置时间时出错", e);
+                AusukaAiMod.LOGGER.error("设置时间时出错", e);
             }
         });
         

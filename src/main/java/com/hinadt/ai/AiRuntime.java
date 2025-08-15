@@ -5,8 +5,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.deepseek.api.DeepSeekApi;
-import com.hinadt.AiMisakiMod;
+import com.hinadt.AusukaAiMod;
 import net.minecraft.server.MinecraftServer;
+import com.hinadt.persistence.MyBatisSupport;
 
 /**
  * AI运行时系统 - 支持多种AI模型提供商
@@ -44,18 +45,19 @@ public final class AiRuntime {
         ChatModel model = createChatModel(selectedProvider);
         
         if (model == null) {
-            AiMisakiMod.LOGGER.error("无法初始化任何AI模型！请检查API密钥配置");
+            AusukaAiMod.LOGGER.error("无法初始化任何AI模型！请检查API密钥配置");
             throw new RuntimeException("AI模型初始化失败 - 未找到有效的API密钥");
         }
         
         AIClient = ChatClient.builder(model).build();
-        
-        // 初始化对话记忆系统
+
+        // 初始化持久层（建表等）并初始化对话记忆系统
+        MyBatisSupport.init();
         conversationMemory = new ConversationMemorySystem();
         
         // ModAdminSystem 需要MinecraftServer，将在第一次访问时延迟初始化
         
-        AiMisakiMod.LOGGER.info("AI运行时初始化完成，使用提供商: {}", selectedProvider.getName());
+        AusukaAiMod.LOGGER.info("AI运行时初始化完成，使用提供商: {}", selectedProvider.getName());
     }
     
     /**
@@ -67,12 +69,12 @@ public final class AiRuntime {
         for (AiProvider provider : AiProvider.values()) {
             String apiKey = System.getenv(provider.getEnvKeyName());
             if (apiKey != null && !apiKey.trim().isEmpty()) {
-                AiMisakiMod.LOGGER.info("检测到 {} API密钥，将使用此提供商", provider.getName());
+                AusukaAiMod.LOGGER.info("检测到 {} API密钥，将使用此提供商", provider.getName());
                 return provider;
             }
         }
         
-        AiMisakiMod.LOGGER.warn("未检测到任何AI提供商的API密钥！");
+        AusukaAiMod.LOGGER.warn("未检测到任何AI提供商的API密钥！");
         return AiProvider.DEEPSEEK; // 默认回退
     }
     
@@ -83,7 +85,7 @@ public final class AiRuntime {
         String apiKey = System.getenv(provider.getEnvKeyName());
         
         if (apiKey == null || apiKey.trim().isEmpty()) {
-            AiMisakiMod.LOGGER.warn("提供商 {} 的API密钥未设置", provider.getName());
+            AusukaAiMod.LOGGER.warn("提供商 {} 的API密钥未设置", provider.getName());
             return null;
         }
         
@@ -95,21 +97,21 @@ public final class AiRuntime {
                 case OPENAI:
                     // TODO: 添加OpenAI支持
                     // return createOpenAiModel(apiKey);
-                    AiMisakiMod.LOGGER.warn("OpenAI支持尚未实现，回退到DeepSeek");
+                    AusukaAiMod.LOGGER.warn("OpenAI支持尚未实现，回退到DeepSeek");
                     return createDeepSeekModel(System.getenv("DEEPSEEK_API_KEY"));
                     
                 case CLAUDE:
                     // TODO: 添加Claude支持
                     // return createClaudeModel(apiKey);
-                    AiMisakiMod.LOGGER.warn("Claude支持尚未实现，回退到DeepSeek");
+                    AusukaAiMod.LOGGER.warn("Claude支持尚未实现，回退到DeepSeek");
                     return createDeepSeekModel(System.getenv("DEEPSEEK_API_KEY"));
                     
                 default:
-                    AiMisakiMod.LOGGER.warn("未知的AI提供商: {}", provider.getName());
+                    AusukaAiMod.LOGGER.warn("未知的AI提供商: {}", provider.getName());
                     return null;
             }
         } catch (Exception e) {
-            AiMisakiMod.LOGGER.error("创建 {} 模型失败", provider.getName(), e);
+            AusukaAiMod.LOGGER.error("创建 {} 模型失败", provider.getName(), e);
             return null;
         }
     }
@@ -163,12 +165,12 @@ public final class AiRuntime {
      * 初始化MOD管理员系统（需要服务器实例）
      */
     public static void initModAdminSystem(MinecraftServer server) {
-        if (modAdminSystem == null && conversationMemory != null) {
+        if (modAdminSystem == null) {
             try {
-                modAdminSystem = new ModAdminSystem(server, conversationMemory.getConnection());
-                AiMisakiMod.LOGGER.info("MOD管理员系统初始化完成");
+                modAdminSystem = new ModAdminSystem(server);
+                AusukaAiMod.LOGGER.info("MOD管理员系统初始化完成");
             } catch (Exception e) {
-                AiMisakiMod.LOGGER.error("MOD管理员系统初始化失败", e);
+                AusukaAiMod.LOGGER.error("MOD管理员系统初始化失败", e);
             }
         }
     }

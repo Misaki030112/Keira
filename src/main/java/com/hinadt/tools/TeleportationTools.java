@@ -1,6 +1,6 @@
 package com.hinadt.tools;
 
-import com.hinadt.AiMisakiMod;
+import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.ai.ConversationMemorySystem;
 import net.minecraft.server.MinecraftServer;
@@ -10,6 +10,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -86,7 +87,7 @@ public class TeleportationTools {
         if (savedLocation != null) {
             ServerWorld targetWorld = getTargetWorld(savedLocation.world);
             if (targetWorld == null) {
-                targetWorld = player.getServerWorld();
+                targetWorld = player.getWorld();
             }
             return teleportToPosition(player, savedLocation.toVec3d(), targetWorld) + 
                    " (使用记忆位置：" + savedLocation.name + ")";
@@ -97,7 +98,7 @@ public class TeleportationTools {
         if (targetPos != null) {
             ServerWorld targetWorld = getTargetWorld(world);
             if (targetWorld == null) {
-                targetWorld = player.getServerWorld();
+                targetWorld = player.getWorld();
             }
             return teleportToPosition(player, targetPos, targetWorld) + " (使用精确坐标)";
         }
@@ -105,7 +106,7 @@ public class TeleportationTools {
         // 3. 尝试作为其他玩家名称
         ServerPlayerEntity targetPlayer = findPlayer(destination);
         if (targetPlayer != null) {
-            return teleportToPosition(player, targetPlayer.getPos(), targetPlayer.getServerWorld()) + 
+            return teleportToPosition(player, targetPlayer.getPos(), targetPlayer.getWorld()) + 
                    " (传送到玩家 " + destination + " 的位置)";
         }
         
@@ -114,7 +115,7 @@ public class TeleportationTools {
         if (intelligentPos != null) {
             ServerWorld targetWorld = getTargetWorld(world);
             if (targetWorld == null) {
-                targetWorld = player.getServerWorld();
+                targetWorld = player.getWorld();
             }
             return teleportToPosition(player, intelligentPos, targetWorld) + " (智能解析位置)";
         }
@@ -123,7 +124,7 @@ public class TeleportationTools {
         if (destination.toLowerCase().contains("出生") || destination.toLowerCase().contains("spawn")) {
             ServerWorld targetWorld = getTargetWorld(world);
             if (targetWorld == null) {
-                targetWorld = player.getServerWorld();
+                targetWorld = player.getWorld();
             }
             BlockPos spawnPos = targetWorld.getSpawnPos();
             Vec3d spawnVec = new Vec3d(spawnPos.getX(), spawnPos.getY(), spawnPos.getZ());
@@ -237,22 +238,22 @@ public class TeleportationTools {
                 double safeY = Math.max(-64, Math.min(320, targetPos.y));
                 Vec3d safePos = new Vec3d(targetPos.x, safeY, targetPos.z);
                 
-                // 执行传送
-                player.teleport(targetWorld, safePos.x, safePos.y, safePos.z, player.getYaw(), player.getPitch());
+                // 执行传送（1.21+ 需要传递 PositionFlag 集合和一个布尔值）
+                player.teleport(targetWorld, safePos.x, safePos.y, safePos.z, java.util.Set.of(), player.getYaw(), player.getPitch(), false);
                 
                 // 发送确认消息
                 String worldName = getWorldDisplayName(targetWorld);
                 String message = String.format("✅ 传送成功！已将 %s 传送到 %s 的坐标 (%.1f, %.1f, %.1f)", 
                     player.getName().getString(), worldName, safePos.x, safePos.y, safePos.z);
                 
-                player.sendMessage(Text.of("[AI Misaki] " + message));
+                player.sendMessage(Text.of("[Ausuka.ai] " + message));
                 result.set(message);
                 
             } catch (Exception e) {
                 String errorMsg = "传送失败：" + e.getMessage();
-                player.sendMessage(Text.of("[AI Misaki] " + errorMsg));
+                player.sendMessage(Text.of("[Ausuka.ai] " + errorMsg));
                 result.set(errorMsg);
-                AiMisakiMod.LOGGER.error("传送玩家时出错", e);
+                AusukaAiMod.LOGGER.error("传送玩家时出错", e);
             }
         });
         
