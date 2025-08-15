@@ -1,6 +1,6 @@
 package com.hinadt.chat;
 
-import com.hinadt.AiAusuka.AiMod;
+import com.hinadt.AiMisakiMod;
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.ai.AiWorkflowManager;
 import com.hinadt.tools.AdminTools;
