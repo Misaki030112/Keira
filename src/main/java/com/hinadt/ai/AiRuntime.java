@@ -6,6 +6,7 @@ import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.deepseek.api.DeepSeekApi;
 import com.hinadt.AiMisakiMod;
+import net.minecraft.server.MinecraftServer;
 
 /**
  * AI运行时系统 - 支持多种AI模型提供商
@@ -14,6 +15,7 @@ import com.hinadt.AiMisakiMod;
 public final class AiRuntime {
     public static ChatClient AIClient;
     private static ConversationMemorySystem conversationMemory;
+    private static ModAdminSystem modAdminSystem;
     
     /**
      * 支持的AI提供商类型
@@ -50,6 +52,8 @@ public final class AiRuntime {
         
         // 初始化对话记忆系统
         conversationMemory = new ConversationMemorySystem();
+        
+        // ModAdminSystem 需要MinecraftServer，将在第一次访问时延迟初始化
         
         AiMisakiMod.LOGGER.info("AI运行时初始化完成，使用提供商: {}", selectedProvider.getName());
     }
@@ -149,11 +153,36 @@ public final class AiRuntime {
     }
     
     /**
+     * 获取MOD管理员系统 - 延迟初始化
+     */
+    public static ModAdminSystem getModAdminSystem() {
+        return modAdminSystem;
+    }
+    
+    /**
+     * 初始化MOD管理员系统（需要服务器实例）
+     */
+    public static void initModAdminSystem(MinecraftServer server) {
+        if (modAdminSystem == null && conversationMemory != null) {
+            try {
+                modAdminSystem = new ModAdminSystem(server, conversationMemory.getConnection());
+                AiMisakiMod.LOGGER.info("MOD管理员系统初始化完成");
+            } catch (Exception e) {
+                AiMisakiMod.LOGGER.error("MOD管理员系统初始化失败", e);
+            }
+        }
+    }
+    
+    /**
      * 关闭AI运行时
      */
     public static void shutdown() {
         if (conversationMemory != null) {
             conversationMemory.shutdown();
+        }
+        if (modAdminSystem != null) {
+            // ModAdminSystem doesn't need shutdown, it uses shared connection
+            modAdminSystem = null;
         }
     }
 }

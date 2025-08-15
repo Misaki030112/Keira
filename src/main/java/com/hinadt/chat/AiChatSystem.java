@@ -32,7 +32,7 @@ public class AiChatSystem {
         registerCommands();
         registerChatListener();
         
-        AiAusuka.AiMod.LOGGER.info("AI聊天系统初始化完成！");
+        AiMisakiMod.LOGGER.info("AI聊天系统初始化完成！");
     }
     
     /**
@@ -193,7 +193,7 @@ public class AiChatSystem {
                     });
                 }
             } catch (Exception e) {
-                AiAusuka.AiMod.LOGGER.error("处理AI聊天消息时出错: " + e.getMessage(), e);
+                AiMisakiMod.LOGGER.error("处理AI聊天消息时出错: " + e.getMessage(), e);
                 server.execute(() -> {
                     player.sendMessage(Text.of("§c[Ausuka.Ai] 抱歉，我遇到了一些问题 😅 请稍后再试"));
                 });
@@ -284,7 +284,7 @@ public class AiChatSystem {
                 });
                 
             } catch (Exception e) {
-                AiAusuka.AiMod.LOGGER.error("生成AI欢迎消息时出错", e);
+                AiMisakiMod.LOGGER.error("生成AI欢迎消息时出错", e);
                 server.execute(() -> {
                     String fallbackWelcome = "🤖 你好 " + player.getName().getString() + "！我是AI助手Ausuka.Ai，" +
                         "可以帮助你管理物品、智能传送、记忆重要位置、建筑指导等。" +

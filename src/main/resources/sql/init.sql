@@ -47,6 +47,22 @@ CREATE TABLE IF NOT EXISTS auto_message_config (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- 玩家位置记忆表
+CREATE TABLE IF NOT EXISTS player_locations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    player_name VARCHAR(255) NOT NULL,
+    location_name VARCHAR(255) NOT NULL,
+    world VARCHAR(255) NOT NULL,
+    x DOUBLE NOT NULL,
+    y DOUBLE NOT NULL,
+    z DOUBLE NOT NULL,
+    description TEXT,
+    saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_player_location (player_name, location_name),
+    INDEX idx_player_name (player_name),
+    INDEX idx_location_name (location_name)
+);
+
 -- 插入默认的自动消息配置
 INSERT IGNORE INTO auto_message_config (config_key, config_value, description) VALUES
 ('system_enabled', 'true', '自动消息系统总开关'),

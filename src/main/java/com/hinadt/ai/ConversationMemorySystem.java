@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
+import net.minecraft.util.math.Vec3d;
 
 /**
  * 基于H2数据库的对话记忆系统
@@ -279,6 +280,13 @@ public class ConversationMemorySystem {
     }
     
     /**
+     * 获取数据库连接（供其他系统使用）
+     */
+    public Connection getConnection() {
+        return connection;
+    }
+    
+    /**
      * 对话记录数据类
      */
     public static class ConversationRecord {
@@ -295,6 +303,178 @@ public class ConversationMemorySystem {
             this.content = content;
             this.timestamp = timestamp;
             this.contextData = contextData;
+        }
+    }
+    
+    /**
+     * 位置数据类 - 用于位置记忆功能
+     */
+    public static class LocationData {
+        public final String name;
+        public final String world;
+        public final double x;
+        public final double y; 
+        public final double z;
+        public final String description;
+        
+        public LocationData(String name, String world, double x, double y, double z, String description) {
+            this.name = name;
+            this.world = world;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.description = description;
+        }
+        
+        public Vec3d toVec3d() {
+            return new Vec3d(x, y, z);
+        }
+    }
+    
+    // ==================== 位置记忆功能 ====================
+    
+    /**
+     * 保存玩家位置记忆
+     */
+    public void saveLocation(String playerName, String locationName, String world, double x, double y, double z, String description) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+            SqlQueryLoader.getQuery("locations.sql", "保存位置记忆"))) {
+            
+            stmt.setString(1, playerName);
+            stmt.setString(2, locationName);
+            stmt.setString(3, world);
+            stmt.setDouble(4, x);
+            stmt.setDouble(5, y);
+            stmt.setDouble(6, z);
+            stmt.setString(7, description);
+            
+            stmt.executeUpdate();
+            AiMisakiMod.LOGGER.info("位置记忆已保存: {} - {} 在 {} ({}, {}, {})", 
+                playerName, locationName, world, x, y, z);
+            
+        } catch (SQLException e) {
+            AiMisakiMod.LOGGER.error("保存位置记忆失败", e);
+        }
+    }
+    
+    /**
+     * 获取指定位置记忆 - 支持模糊匹配
+     */
+    public LocationData getLocationForTeleport(String playerName, String destination) {
+        // 首先尝试精确匹配
+        LocationData exact = getExactLocation(playerName, destination);
+        if (exact != null) {
+            return exact;
+        }
+        
+        // 然后尝试模糊匹配
+        return getFuzzyLocation(playerName, destination);
+    }
+    
+    /**
+     * 精确匹配位置
+     */
+    private LocationData getExactLocation(String playerName, String locationName) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+            SqlQueryLoader.getQuery("locations.sql", "获取指定位置"))) {
+            
+            stmt.setString(1, playerName);
+            stmt.setString(2, locationName);
+            
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return new LocationData(
+                    rs.getString("location_name"),
+                    rs.getString("world"),
+                    rs.getDouble("x"),
+                    rs.getDouble("y"),
+                    rs.getDouble("z"),
+                    rs.getString("description")
+                );
+            }
+            
+        } catch (SQLException e) {
+            AiMisakiMod.LOGGER.error("获取位置记忆失败", e);
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 模糊匹配位置
+     */
+    private LocationData getFuzzyLocation(String playerName, String searchTerm) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+            SqlQueryLoader.getQuery("locations.sql", "模糊搜索位置"))) {
+            
+            stmt.setString(1, playerName);
+            stmt.setString(2, "%" + searchTerm + "%");
+            
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return new LocationData(
+                    rs.getString("location_name"),
+                    rs.getString("world"),
+                    rs.getDouble("x"),
+                    rs.getDouble("y"),
+                    rs.getDouble("z"),
+                    rs.getString("description")
+                );
+            }
+            
+        } catch (SQLException e) {
+            AiMisakiMod.LOGGER.error("模糊搜索位置失败", e);
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 获取玩家所有位置记忆
+     */
+    public List<LocationData> getAllLocations(String playerName) {
+        List<LocationData> locations = new ArrayList<>();
+        
+        try (PreparedStatement stmt = connection.prepareStatement(
+            SqlQueryLoader.getQuery("locations.sql", "获取玩家所有位置"))) {
+            
+            stmt.setString(1, playerName);
+            
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                locations.add(new LocationData(
+                    rs.getString("location_name"),
+                    rs.getString("world"),
+                    rs.getDouble("x"),
+                    rs.getDouble("y"),
+                    rs.getDouble("z"),
+                    rs.getString("description")
+                ));
+            }
+            
+        } catch (SQLException e) {
+            AiMisakiMod.LOGGER.error("获取所有位置记忆失败", e);
+        }
+        
+        return locations;
+    }
+    
+    /**
+     * 删除位置记忆
+     */
+    public boolean deleteLocation(String playerName, String locationName) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+            SqlQueryLoader.getQuery("locations.sql", "删除指定位置"))) {
+            
+            stmt.setString(1, playerName);
+            stmt.setString(2, locationName);
+            
+            int deleted = stmt.executeUpdate();
+            return deleted > 0;
+            
+        } catch (SQLException e) {
+            AiMisakiMod.LOGGER.error("删除位置记忆失败", e);
+            return false;
         }
     }
 }

@@ -393,6 +393,15 @@ public class AdminTools {
     }
     
     /**
+     * 获取管理员欢迎信息（供聊天系统调用）
+     */
+    public static String getAdminWelcomeInfo(String playerName) {
+        return String.format("🛡️ 管理员 %s，欢迎使用AI助手管理系统！\n" +
+            "你拥有以下额外权限：踢人、封禁、冻结、强制传送、监禁等功能。\n" +
+            "使用时请谨慎，确保服务器秩序和玩家体验。", playerName);
+    }
+    
+    /**
      * 监禁信息数据类
      */
     private static class JailInfo {

@@ -29,7 +29,8 @@ public class AiWorkflowManager {
     private final WeatherTools weatherTools;
     private final PlayerStatsTools playerStatsTools;
     private final WorldAnalysisTools worldAnalysisTools;
-    private final MemorySystem memorySystem;
+    private final ConversationMemorySystem memorySystem;
+    private final MemoryTools memoryTools;
     private final AdminTools adminTools;
     
     public AiWorkflowManager(MinecraftServer server) {
@@ -39,8 +40,12 @@ public class AiWorkflowManager {
         this.weatherTools = new WeatherTools(server);
         this.playerStatsTools = new PlayerStatsTools(server);
         this.worldAnalysisTools = new WorldAnalysisTools(server);
-        this.memorySystem = new MemorySystem();
-        this.adminTools = new AdminTools(server);
+        this.memorySystem = AiRuntime.getConversationMemory();
+        this.memoryTools = new MemoryTools(server);
+        
+        // 初始化MOD管理员系统（如果还未初始化）
+        AiRuntime.initModAdminSystem(server);
+        this.adminTools = new AdminTools(server, AiRuntime.getModAdminSystem());
     }
     
     /**
@@ -76,7 +81,7 @@ public class AiWorkflowManager {
                     // 提供所有工具给AI，让AI自主选择和调用
                     mcTools,               // 物品管理工具
                     teleportTools,         // 传送工具
-                    memorySystem,          // 记忆系统工具
+                    memoryTools,           // 记忆系统工具
                     weatherTools,          // 天气控制工具
                     playerStatsTools,      // 玩家管理工具
                     worldAnalysisTools,    // 世界分析工具
@@ -144,7 +149,7 @@ public class AiWorkflowManager {
             ### 🚀 智能传送工具 (TeleportationTools)  
             - **teleport_player**: 智能传送系统，支持记忆位置、坐标、预设地点、玩家位置、多世界传送
             
-            ### 🧠 记忆系统工具 (MemorySystem)
+            ### 🧠 记忆系统工具 (ConversationMemorySystem)
             - **save_location**: 保存玩家定义的重要位置("这里是我的家"→保存位置)
             - **get_saved_location**: 获取特定位置信息用于传送或回忆
             - **list_saved_locations**: 列出玩家所有保存的位置
@@ -291,30 +296,16 @@ public class AiWorkflowManager {
      */
     private String getPlayerMemoryContext(String playerName) {
         try {
-            // 尝试获取玩家的记忆信息
-            String locationMemory = memorySystem.listSavedLocations(playerName);
+            // 使用MemoryTools获取玩家的位置记忆信息
+            String locationMemory = memoryTools.listSavedLocations(playerName);
             
-            // 获取一些常见偏好
+            // 构建记忆信息
             StringBuilder memory = new StringBuilder();
             memory.append("**玩家记忆信息**:\n");
             memory.append(locationMemory).append("\n");
             
-            // 尝试获取一些常见偏好类型
-            String[] preferenceTypes = {"建筑风格", "材料偏好", "游戏目标", "活动偏好"};
-            boolean hasPreferences = false;
-            for (String type : preferenceTypes) {
-                try {
-                    String pref = memorySystem.getPlayerPreference(playerName, type);
-                    if (!pref.contains("❌")) {
-                        memory.append(pref).append("\n");
-                        hasPreferences = true;
-                    }
-                } catch (Exception ignored) {}
-            }
-            
-            if (!hasPreferences) {
-                memory.append("- 暂无个人偏好记录，可以询问玩家并保存偏好\n");
-            }
+            // 目前只支持位置记忆，偏好系统将在未来版本中添加
+            memory.append("- 偏好系统开发中，当前版本仅支持位置记忆\n");
             
             return memory.toString();
             

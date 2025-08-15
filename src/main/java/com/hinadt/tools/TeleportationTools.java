@@ -1,7 +1,8 @@
 package com.hinadt.tools;
 
 import com.hinadt.AiMisakiMod;
-import com.hinadt.ai.MemorySystem;
+import com.hinadt.ai.AiRuntime;
+import com.hinadt.ai.ConversationMemorySystem;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -81,7 +82,7 @@ public class TeleportationTools {
         }
         
         // 1. 最高优先级：检查记忆中的位置
-        MemorySystem.LocationData savedLocation = MemorySystem.getLocationForTeleport(playerName, destination);
+        ConversationMemorySystem.LocationData savedLocation = AiRuntime.getConversationMemory().getLocationForTeleport(playerName, destination);
         if (savedLocation != null) {
             ServerWorld targetWorld = getTargetWorld(savedLocation.world);
             if (targetWorld == null) {
