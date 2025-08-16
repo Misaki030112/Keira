@@ -89,13 +89,13 @@ public class TeleportationTools {
         ConversationMemorySystem.LocationData savedLocation = AiRuntime.getConversationMemory().getLocationForTeleport(playerName, destination);
         if (savedLocation != null) {
             AusukaAiMod.LOGGER.debug("{} [tool:teleport_player] 使用记忆位置 name='{}' world='{}'",
-                    RequestContext.midTag(), savedLocation.name, savedLocation.world);
-            ServerWorld targetWorld = getTargetWorld(savedLocation.world);
+                    RequestContext.midTag(), savedLocation.name(), savedLocation.world());
+            ServerWorld targetWorld = getTargetWorld(savedLocation.world());
             if (targetWorld == null) {
                 targetWorld = player.getWorld();
             }
             return teleportToPosition(player, savedLocation.toVec3d(), targetWorld) + 
-                   " (使用记忆位置：" + savedLocation.name + ")";
+                   " (使用记忆位置：" + savedLocation.name() + ")";
         }
         
         // 2. 尝试解析为精确坐标

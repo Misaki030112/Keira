@@ -7,7 +7,7 @@ import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-import com.hinadt.tools.Messages;
+import com.hinadt.util.Messages;
 
 public final class HelpCommands {
     private HelpCommands() {}

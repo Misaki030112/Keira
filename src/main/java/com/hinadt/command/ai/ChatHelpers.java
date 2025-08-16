@@ -6,7 +6,7 @@ import com.hinadt.command.core.AiServices;
 import com.hinadt.tools.AdminTools;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-import com.hinadt.tools.Messages;
+import com.hinadt.util.Messages;
 
 import java.util.concurrent.CompletableFuture;
 

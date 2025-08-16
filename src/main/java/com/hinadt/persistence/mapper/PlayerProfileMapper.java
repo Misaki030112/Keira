@@ -2,6 +2,7 @@ package com.hinadt.persistence.mapper;
 
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 public interface PlayerProfileMapper {
@@ -17,5 +18,7 @@ public interface PlayerProfileMapper {
                       @Param("playerName") String playerName,
                       @Param("ip") String ip,
                       @Param("locale") String locale);
-}
 
+    @Select("SELECT last_locale FROM player_profiles WHERE uuid = #{uuid} LIMIT 1")
+    String selectLastLocaleByUuid(@Param("uuid") String uuid);
+}

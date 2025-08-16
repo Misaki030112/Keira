@@ -26,7 +26,7 @@ public class ItemSearchTool {
 
     // ----------------------------- AI-Facing DTO -----------------------------
     // A clear, stable contract for AI tools (do NOT rename fields casually).
-    public static record ItemEntry(
+    public  record ItemEntry(
             String id,            // canonical identifier: "namespace:path"
             String namespace,     // namespace (mod id), e.g., "minecraft"
             String path,          // path, e.g., "diamond_sword"
@@ -89,7 +89,7 @@ public class ItemSearchTool {
           - If no matches, return an empty array (no fallbacks/hallucinations).
         """
     )
-    public static List<ItemEntry> searchItems(
+    public  List<ItemEntry> searchItems(
             @ToolParam(description = "Free-text query with operators (optional).") String query,
             @ToolParam(description = "Max results, default 50, range 1..200.") Integer limit,
             @ToolParam(description = "Offset for pagination, default 0.") Integer offset

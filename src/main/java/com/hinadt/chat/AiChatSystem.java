@@ -3,7 +3,7 @@ package com.hinadt.chat;
 import com.hinadt.AusukaAiMod;
 import com.hinadt.command.core.AiServices;
 import com.hinadt.ai.AiRuntime;
-import com.hinadt.tools.Messages;
+import com.hinadt.util.Messages;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;

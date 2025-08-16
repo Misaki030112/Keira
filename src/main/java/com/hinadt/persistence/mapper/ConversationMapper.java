@@ -1,8 +1,8 @@
 package com.hinadt.persistence.mapper;
 
+import com.hinadt.persistence.model.ConversationRow;
 import org.apache.ibatis.annotations.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -15,19 +15,19 @@ public interface ConversationMapper {
                        @Param("content") String content,
                        @Param("contextData") String contextData);
 
-    // Get the session_id of the most recent message for this player.
-    // H2 does not allow ORDER BY on a column not in the select list when DISTINCT is used.
-    // DISTINCT is unnecessary here because ordering by timestamp and limiting to 1 already
-    // picks the latest row's session_id.
-    @Select("SELECT session_id FROM conversations WHERE player_name = #{playerName} ORDER BY timestamp DESC LIMIT 1")
-    String getLatestSessionId(@Param("playerName") String playerName);
+    @Select("SELECT session_id, message_type, message_content, `timestamp`, context_data FROM conversations WHERE player_name = #{playerName} AND session_id = #{sessionId} ORDER BY `timestamp` DESC LIMIT #{limit}")
+    @Results(id = "ConversationRowMapping", value = {
+            @Result(property = "sessionId", column = "session_id"),
+            @Result(property = "messageType", column = "message_type"),
+            @Result(property = "messageContent", column = "message_content"),
+            @Result(property = "timestamp", column = "timestamp"),
+            @Result(property = "contextData", column = "context_data")
+    })
+    List<ConversationRow> getRecent(@Param("playerName") String playerName,
+                                    @Param("sessionId") String sessionId,
+                                    @Param("limit") int limit);
 
-    @Select("SELECT session_id, message_type, message_content AS content, `timestamp` AS created_at, context_data FROM conversations WHERE player_name = #{playerName} AND session_id = #{sessionId} ORDER BY timestamp DESC LIMIT #{limit}")
-    List<Map<String, Object>> getRecent(@Param("playerName") String playerName,
-                                        @Param("sessionId") String sessionId,
-                                        @Param("limit") int limit);
-
-    @Delete("DELETE FROM conversations WHERE timestamp < DATEADD('DAY', -#{days}, CURRENT_TIMESTAMP)")
+    @Delete("DELETE FROM conversations WHERE `timestamp` < DATEADD('DAY', -#{days}, CURRENT_TIMESTAMP)")
     int deleteOlderThan(@Param("days") int days);
 
     @Select("SELECT COUNT(*) AS total_messages, COUNT(DISTINCT player_name) AS unique_players, COUNT(DISTINCT session_id) AS total_sessions FROM conversations")

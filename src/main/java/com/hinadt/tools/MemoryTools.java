@@ -15,10 +15,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * AI记忆系统工具集合
- * - 支持位置记忆和检索
- * - 支持玩家偏好存储
- * - 支持全局服务器记忆
+ * AI memory tools
+ * - Location memory save/retrieve
+ * - Player preference storage (future)
+ * - Global server memory (future)
  */
 public class MemoryTools {
     
@@ -31,35 +31,30 @@ public class MemoryTools {
     @Tool(
         name = "save_location",
         description = """
-        保存玩家定义的重要位置到记忆系统。当玩家说"记住这里是我的家"时使用此工具。
-        
-        **功能详细说明**：
-        - 保存玩家当前位置并关联一个有意义的名称
-        - 支持覆盖更新已存在的位置名称
-        - 自动记录位置的世界、坐标和描述信息
-        - 用于后续的智能传送和位置回忆
-        
-        **使用场景**：
-        - 玩家说："记住这里是我的家"
-        - 玩家说："把这个位置保存为农场"
-        - 玩家说："标记这里为矿井入口"
-        
-        **参数说明**：
-        - playerName: 玩家名称
-        - locationName: 位置名称(如"家"、"农场"、"矿井")
-        - description: 位置描述(可选，用于更好的识别)
+        Save a player-defined important location into the memory system. Use when the player says things like "remember this is my home".
+
+        Details:
+        - Save the player's current position with a meaningful name
+        - Overwrites if the name already exists
+        - Records world, coordinates, and a description
+        - Enables later teleportation and recall
+
+        Parameters:
+        - playerName: player name
+        - locationName: location name (e.g., "home", "farm", "mine")
+        - description: optional description for better recognition
         """
     )
     public String saveLocation(
-        @ToolParam(description = "要保存位置记忆的玩家名称") String playerName,
-        @ToolParam(description = "位置名称，如'家'、'农场'、'矿井'等") String locationName,
-        @ToolParam(description = "位置的详细描述(可选)") String description
+        @ToolParam(description = "Player name for the location memory") String playerName,
+        @ToolParam(description = "Location name, such as 'home', 'farm', 'mine'") String locationName,
+        @ToolParam(description = "Optional detailed description for the location") String description
     ) {
         AusukaAiMod.LOGGER.debug("{} [tool:save_location] params player='{}' name='{}' desc='{}'",
                 RequestContext.midTag(), playerName, locationName, description);
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerName);
         if (player == null) {
-            return "❌ 找不到玩家: " + playerName;
+            return "❌ Player not found: " + playerName;
         }
         
         CountDownLatch latch = new CountDownLatch(1);
@@ -70,10 +65,10 @@ public class MemoryTools {
                 BlockPos pos = player.getBlockPos();
                 String worldName = player.getWorld().getRegistryKey().getValue().toString();
                 
-                // 如果没有提供描述，自动生成一个简单的描述
-                String finalDescription = description != null && !description.trim().isEmpty() 
-                    ? description 
-                    : "玩家在 " + worldName + " 保存的位置";
+                // Auto-generate a description if none is provided
+                String finalDescription = description != null && !description.trim().isEmpty()
+                        ? description
+                        : "Saved position in world " + worldName;
                 
                 AiRuntime.getConversationMemory().saveLocation(
                     playerName, 
@@ -85,14 +80,14 @@ public class MemoryTools {
                     finalDescription
                 );
                 
-                result.set(String.format("✅ 已保存位置记忆：%s → %s (%d, %d, %d) 在 %s", 
-                    locationName, finalDescription, pos.getX(), pos.getY(), pos.getZ(), worldName));
+                result.set(String.format("✅ Saved location memory: %s → %s (%d, %d, %d) in %s",
+                        locationName, finalDescription, pos.getX(), pos.getY(), pos.getZ(), worldName));
                 AusukaAiMod.LOGGER.debug("{} [tool:save_location] saved name='{}' world='{}' pos=({},{},{})",
                         RequestContext.midTag(), locationName, worldName, pos.getX(), pos.getY(), pos.getZ());
                 
             } catch (Exception e) {
-                AusukaAiMod.LOGGER.error("保存位置记忆失败", e);
-                result.set("❌ 保存位置记忆时发生错误: " + e.getMessage());
+                AusukaAiMod.LOGGER.error("Failed to save location memory", e);
+                result.set("❌ Error while saving location memory: " + e.getMessage());
             } finally {
                 latch.countDown();
             }
@@ -102,7 +97,7 @@ public class MemoryTools {
             latch.await();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return "❌ 保存位置记忆操作被中断";
+            return "❌ Save location memory operation was interrupted";
         }
         
         return result.get();
@@ -111,25 +106,17 @@ public class MemoryTools {
     @Tool(
         name = "get_saved_location",
         description = """
-        获取玩家保存的特定位置信息。支持精确匹配和模糊搜索。
-        
-        **功能详细说明**：
-        - 先尝试精确匹配位置名称
-        - 如果精确匹配失败，进行模糊搜索
-        - 返回位置的完整信息(坐标、世界、描述)
-        - 用于传送前的位置验证或信息查询
-        
-        **搜索策略**：
-        - 精确匹配："家" → 查找名为"家"的位置
-        - 模糊匹配："农" → 可能匹配"农场"、"大农场"等
-        
-        **返回信息**：
-        - 位置名称、世界、坐标、保存时的描述
+        Get a player's saved location by name. Supports exact and fuzzy matching.
+
+        Details:
+        - Try exact match first
+        - Fallback to fuzzy search if needed
+        - Returns full info (coords, world, description)
         """
     )
     public String getSavedLocation(
-        @ToolParam(description = "玩家名称") String playerName,
-        @ToolParam(description = "要查找的位置名称或关键词") String locationName
+        @ToolParam(description = "Player name") String playerName,
+        @ToolParam(description = "Location name or keyword") String locationName
     ) {
         try {
             AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] params player='{}' name='{}'",
@@ -138,43 +125,36 @@ public class MemoryTools {
                 AiRuntime.getConversationMemory().getLocationForTeleport(playerName, locationName);
             
             if (location == null) {
-                return String.format("❌ 未找到玩家 %s 的位置记忆: %s", playerName, locationName);
+                return String.format("❌ No location memory found for player %s: %s", playerName, locationName);
             }
             
-            String out = String.format("📍 位置信息：\n" +
-                "名称: %s\n" +
-                "世界: %s\n" +
-                "坐标: (%.1f, %.1f, %.1f)\n" +
-                "描述: %s",
-                location.name, location.world, location.x, location.y, location.z, location.description);
-            AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] hit name='{}' world='{}'", RequestContext.midTag(), location.name, location.world);
+            String out = String.format("📍 Location Info:\n" +
+                "Name: %s\n" +
+                "World: %s\n" +
+                "Coords: (%.1f, %.1f, %.1f)\n" +
+                "Description: %s",
+                    location.name(), location.world(), location.x(), location.y(), location.z(), location.description());
+            AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] hit name='{}' world='{}'", RequestContext.midTag(), location.name(), location.world());
             return out;
                 
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("获取位置记忆失败", e);
-            return "❌ 获取位置记忆时发生错误: " + e.getMessage();
+            AusukaAiMod.LOGGER.error("Failed to get location memory", e);
+            return "❌ Error fetching location memory: " + e.getMessage();
         }
     }
     
     @Tool(
         name = "list_saved_locations",
         description = """
-        列出玩家所有保存的位置记忆。用于帮助玩家回忆或选择传送目标。
-        
-        **功能详细说明**：
-        - 显示玩家所有保存过的位置
-        - 按保存时间倒序排列(最新的在前)
-        - 包含位置名称、坐标、世界和描述信息
-        - 帮助玩家记忆和选择可用的传送目标
-        
-        **使用场景**：
-        - 玩家问："我保存了哪些位置？"
-        - 玩家说："列出我的所有传送点"
-        - AI需要为玩家提供可用的传送选项
+        List all saved locations for a player.
+
+        Details:
+        - Shows all saved locations
+        - Includes name, world, coordinates, and description
         """
     )
     public String listSavedLocations(
-        @ToolParam(description = "要查询位置记忆的玩家名称") String playerName
+        @ToolParam(description = "Player name to list locations for") String playerName
     ) {
         try {
             AusukaAiMod.LOGGER.debug("{} [tool:list_saved_locations] params player='{}'",
@@ -183,19 +163,19 @@ public class MemoryTools {
                 AiRuntime.getConversationMemory().getAllLocations(playerName);
             
             if (locations.isEmpty()) {
-                return String.format("📍 玩家 %s 还没有保存任何位置记忆。\n" +
-                    "可以使用 '记住这里是我的xxx' 来保存当前位置。", playerName);
+                return String.format("📍 Player %s has no saved locations yet.\n" +
+                        "Use phrases like 'remember this is my home' to save the current position.", playerName);
             }
             
             StringBuilder result = new StringBuilder();
-            result.append(String.format("📍 玩家 %s 的所有位置记忆：\n\n", playerName));
+            result.append(String.format("📍 All saved locations for %s:\n\n", playerName));
             
             for (int i = 0; i < locations.size(); i++) {
                 ConversationMemorySystem.LocationData loc = locations.get(i);
-                result.append(String.format("%d. **%s**\n", i + 1, loc.name));
-                result.append(String.format("   坐标: (%.1f, %.1f, %.1f)\n", loc.x, loc.y, loc.z));
-                result.append(String.format("   世界: %s\n", loc.world));
-                result.append(String.format("   描述: %s\n\n", loc.description));
+                result.append(String.format("%d. **%s**\n", i + 1, loc.name()));
+                result.append(String.format("   Coords: (%.1f, %.1f, %.1f)\n", loc.x(), loc.y(), loc.z()));
+                result.append(String.format("   World: %s\n", loc.world()));
+                result.append(String.format("   Description: %s\n\n", loc.description()));
             }
             
             AusukaAiMod.LOGGER.debug("{} [tool:list_saved_locations] return size={}",
@@ -203,30 +183,24 @@ public class MemoryTools {
             return result.toString();
             
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("列出位置记忆失败", e);
-            return "❌ 获取位置记忆列表时发生错误: " + e.getMessage();
+            AusukaAiMod.LOGGER.error("Failed to list location memory", e);
+            return "❌ Error listing location memory: " + e.getMessage();
         }
     }
     
     @Tool(
         name = "delete_saved_location", 
         description = """
-        删除玩家指定的位置记忆。用于清理不再需要的位置记忆。
-        
-        **功能详细说明**：
-        - 永久删除指定名称的位置记忆
-        - 删除后无法恢复，需要谨慎操作
-        - 支持精确匹配位置名称
-        
-        **使用场景**：
-        - 玩家说："删除我的旧家位置"
-        - 玩家说："移除农场的位置记忆"
-        - 清理过时或错误的位置记忆
+        Delete a player's saved location by name.
+
+        Details:
+        - Permanently deletes the specified location memory
+        - Not recoverable after deletion
         """
     )
     public String deleteSavedLocation(
-        @ToolParam(description = "玩家名称") String playerName,
-        @ToolParam(description = "要删除的位置名称") String locationName
+        @ToolParam(description = "Player name") String playerName,
+        @ToolParam(description = "Location name to delete") String locationName
     ) {
         try {
             AusukaAiMod.LOGGER.debug("{} [tool:delete_saved_location] params player='{}' name='{}'",
@@ -236,14 +210,14 @@ public class MemoryTools {
             if (deleted) {
                 AusukaAiMod.LOGGER.debug("{} [tool:delete_saved_location] deleted name='{}'",
                         RequestContext.midTag(), locationName);
-                return String.format("✅ 已删除位置记忆：%s", locationName);
+                return String.format("✅ Deleted location memory: %s", locationName);
             } else {
-                return String.format("❌ 未找到要删除的位置记忆：%s", locationName);
+                return String.format("❌ No location memory found to delete: %s", locationName);
             }
             
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("删除位置记忆失败", e);
-            return "❌ 删除位置记忆时发生错误: " + e.getMessage();
+            AusukaAiMod.LOGGER.error("Failed to delete location memory", e);
+            return "❌ Error deleting location memory: " + e.getMessage();
         }
     }
 }

@@ -10,7 +10,7 @@ import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-import com.hinadt.tools.Messages;
+import com.hinadt.util.Messages;
 import com.hinadt.persistence.MyBatisSupport;
 import com.hinadt.persistence.mapper.ConversationMapper;
 import com.hinadt.persistence.mapper.ChatSessionMapper;

@@ -1,4 +1,4 @@
-package com.hinadt.tools;
+package com.hinadt.util;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;

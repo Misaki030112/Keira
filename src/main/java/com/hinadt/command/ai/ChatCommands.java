@@ -5,7 +5,7 @@ import com.hinadt.ai.AiRuntime;
 import com.hinadt.ai.ModAdminSystem;
 import com.hinadt.command.core.AiServices;
 import com.hinadt.command.core.Permissions;
-import com.hinadt.tools.Messages;
+import com.hinadt.util.Messages;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;

@@ -2,7 +2,7 @@ package com.hinadt.chat;
 
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
-import com.hinadt.tools.Messages;
+import com.hinadt.util.Messages;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;

@@ -11,15 +11,15 @@ package com.hinadt.tools.items;
 
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-import net.minecraft.registry.Registries;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
-import java.util.*;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class GiveItemTool {
 
     // ----------------------------- AI-facing result DTO -----------------------------
-    public static record GiveItemResult(
+    public record GiveItemResult(
             boolean ok,           // overall success flag
             String  code,         // "OK", "ERR_INVALID_ITEM_ID", "ERR_ITEM_NOT_FOUND", "ERR_PLAYER_OFFLINE", "ERR_BAD_COUNT"
             String  message,      // human-readable explanation (en_us)
@@ -78,7 +78,7 @@ public class GiveItemTool {
           - Drop behavior is safe by default; it does not force a specific Y offset.
         """
     )
-    public static GiveItemResult giveItem(
+    public GiveItemResult giveItem(
             @ToolParam(description = "Online player name or UUID") String target,
             @ToolParam(description = "Exact item id, e.g., 'minecraft:diamond_sword'") String item,
             @ToolParam(description = "Item count (default 1, clamped to [1..1024])") Integer count
@@ -155,10 +155,10 @@ public class GiveItemTool {
 
     // ----------------------------- Utilities -----------------------------
 
-    private static int clamp(int v, int min, int max) { return Math.max(min, Math.min(max, v)); }
+    private int clamp(int v, int min, int max) { return Math.max(min, Math.min(max, v)); }
 
     /** Find an online player by name first, then by UUID string. */
-    private static ServerPlayerEntity findOnlinePlayer(String nameOrUuid) {
+    private ServerPlayerEntity findOnlinePlayer(String nameOrUuid) {
         MinecraftServer server = net.fabricmc.loader.api.FabricLoader.getInstance()
                 .getGameInstance() instanceof MinecraftServer s ? s : null;
         if (server == null) return null;
@@ -177,7 +177,7 @@ public class GiveItemTool {
     }
 
     /** Ensure the runnable runs on the server main thread; block until completion. */
-    private static void runOnMainAndWait(Runnable task) {
+    private void runOnMainAndWait(Runnable task) {
         MinecraftServer server = net.fabricmc.loader.api.FabricLoader.getInstance()
                 .getGameInstance() instanceof MinecraftServer s ? s : null;
         if (server == null) { task.run(); return; }

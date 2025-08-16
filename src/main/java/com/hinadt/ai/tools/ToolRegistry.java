@@ -2,10 +2,13 @@ package com.hinadt.ai.tools;
 
 import com.hinadt.ai.*;
 import com.hinadt.tools.*;
+import com.hinadt.tools.items.GiveItemTool;
+import com.hinadt.tools.items.ItemSearchTool;
 import net.minecraft.server.MinecraftServer;
 
 public class ToolRegistry {
-    public final McTools mcTools;
+    public final ItemSearchTool itemSearchTool;
+    public final GiveItemTool giveItemTool;
     public final TeleportationTools teleportTools;
     public final WeatherTools weatherTools;
     public final PlayerStatsTools playerStatsTools;
@@ -14,7 +17,9 @@ public class ToolRegistry {
     public final AdminTools adminTools;
 
     public ToolRegistry(MinecraftServer server) {
-        this.mcTools = new McTools(server);
+        // Item tools
+        this.itemSearchTool = new ItemSearchTool();
+        this.giveItemTool = new GiveItemTool();
         this.teleportTools = new TeleportationTools(server);
         this.weatherTools = new WeatherTools(server);
         this.playerStatsTools = new PlayerStatsTools(server);
@@ -25,4 +30,3 @@ public class ToolRegistry {
         this.adminTools = new AdminTools(server, AiRuntime.getModAdminSystem());
     }
 }
-

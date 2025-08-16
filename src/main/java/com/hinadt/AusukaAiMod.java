@@ -2,7 +2,7 @@ package com.hinadt;
 
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.chat.AiChatSystem;
-import com.hinadt.tools.Messages;
+import com.hinadt.util.Messages;
 import com.hinadt.command.AiCommandRegistry;
 import com.hinadt.command.core.AiServices;
 import com.hinadt.chat.IntelligentAutoMessageSystem;

@@ -4,26 +4,40 @@ import com.hinadt.AusukaAiMod;
 import com.hinadt.persistence.MyBatisSupport;
 import com.hinadt.persistence.mapper.ConversationMapper;
 import com.hinadt.persistence.mapper.LocationMapper;
-
-import java.sql.*;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.UUID;
+import com.hinadt.persistence.model.ConversationRow;
 import net.minecraft.util.math.Vec3d;
 
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * 基于H2数据库的对话记忆系统
- * 提供持久化的对话上下文存储和检索功能
- * 数据存储在 ./config/ausuka-ai/ 目录下
+ * Conversation memory system backed by H2 via MyBatis.
+ * - Persists conversation history for retrieval and long-term memory.
+ * - The current active session ID is in-memory only (per online player).
+ * Data files live under ./config/ausuka-ai/
  */
 public class ConversationMemorySystem {
 
-    // 每个玩家的会话ID
+    /**
+     * Allowed message types for conversation records.
+     */
+    public enum MessageType {
+        USER, AI, SYSTEM;
+
+        public static MessageType from(String value) {
+            if (value == null) throw new IllegalArgumentException("messageType cannot be null");
+            try {
+                return MessageType.valueOf(value.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("Unsupported messageType: " + value);
+            }
+        }
+    }
+
+    // Current session id per online player (in-memory only)
     private final Map<String, String> playerSessions = new ConcurrentHashMap<>();
-    // 每个玩家的对话历史缓存
+    // Recent conversation cache per player (in-memory, convenience only)
     private final Map<String, List<ConversationRecord>> conversationCache = new ConcurrentHashMap<>();
 
     public ConversationMemorySystem() {
@@ -32,7 +46,7 @@ public class ConversationMemorySystem {
     }
     
     /**
-     * 获取玩家的对话历史上下文
+     * Build conversation context (English) for AI prompting.
      */
     public String getConversationContext(String playerName) {
         List<ConversationRecord> history = getRecentConversation(playerName, 10);
@@ -41,276 +55,174 @@ public class ConversationMemorySystem {
         }
         
         StringBuilder context = new StringBuilder();
-        context.append("## 对话历史上下文 ##\n");
+        context.append("## Conversation History Context ##\n");
         for (ConversationRecord record : history) {
-            String role;
-            if ("USER".equalsIgnoreCase(record.messageType)) {
-                role = "玩家";
-            } else if ("AI".equalsIgnoreCase(record.messageType)) {
-                role = "AI";
-            } else if ("SYSTEM".equalsIgnoreCase(record.messageType)) {
-                role = "系统";
-            } else {
-                role = record.messageType;
-            }
+            String role = switch (record.messageType) {
+                case USER -> "User";
+                case AI -> "AI";
+                case SYSTEM -> "System";
+            };
             context.append(String.format("[%s] %s: %s\n",
-                    record.timestamp.toString().substring(11, 19), // 只显示时间部分
+                    record.timestamp.toString().substring(11, 19), // show time part only
                     role,
                     record.content));
         }
-        context.append("## 当前对话 ##\n");
+        context.append("## Current Conversation ##\n");
         
         return context.toString();
     }
     
     /**
-     * 保存用户消息
+     * Save a user message for the current session.
      */
     public void saveUserMessage(String playerName, String message) {
-        String sessionId = getCurrentSessionId(playerName);
-        saveMessage(playerName, sessionId, "USER", message, "{}");
-        
-        // 更新缓存
-        updateCache(playerName, new ConversationRecord(sessionId, "USER", message, LocalDateTime.now(), "{}"));
+        saveMessage(playerName, MessageType.USER, message);
     }
     
     /**
-     * 保存AI响应
+     * Save an AI response for the current session.
      */
     public void saveAiResponse(String playerName, String response) {
+        saveMessage(playerName, MessageType.AI, response);
+    }
+
+    /**
+     * Unified API to save a message for the current session and update cache.
+     */
+    public void saveMessage(String playerName, MessageType type, String content) {
         String sessionId = getCurrentSessionId(playerName);
-        saveMessage(playerName, sessionId, "AI", response, "{}");
-        
-        // 更新缓存
-        updateCache(playerName, new ConversationRecord(sessionId, "AI", response, LocalDateTime.now(), "{}"));
+        persistMessage(playerName, sessionId, type, content, "{}");
+        updateCache(playerName, new ConversationRecord(sessionId, type, content, LocalDateTime.now(), "{}"));
     }
     
     /**
-     * 开始新的对话会话
+     * Start a new conversation session. Stored only in memory.
      */
     public String startNewConversation(String playerName) {
         String newSessionId = UUID.randomUUID().toString().substring(0, 8);
         playerSessions.put(playerName, newSessionId);
         
-        // 清除缓存
+        // Clear cache for the player
         conversationCache.remove(playerName);
         
-        // 保存会话开始标记
-        saveMessage(playerName, newSessionId, "SYSTEM", "新对话会话开始", "{}");
+        // Mark session start
+        persistMessage(playerName, newSessionId, MessageType.SYSTEM, "New conversation session started", "{}");
         
         return newSessionId;
     }
     
     /**
-     * 获取当前会话ID
+     * Get the current session ID for a player. Does NOT read from history.
+     * If absent (new player or after logout), a new session is created.
      */
     public String getCurrentSessionId(String playerName) {
-        // Fast path: already cached
         String cached = playerSessions.get(playerName);
         if (cached != null) return cached;
-
-        // Try load latest from DB
-        try (var session = MyBatisSupport.getFactory().openSession()) {
-            ConversationMapper mapper = session.getMapper(ConversationMapper.class);
-            String latest = mapper.getLatestSessionId(playerName);
-            if (latest != null) {
-                playerSessions.putIfAbsent(playerName, latest);
-                return latest;
-            }
-        } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("获取会话ID失败", e);
-        }
-
-        // Fallback: create a new session (also updates map and cache appropriately)
+        // Create a fresh session instead of resuming from history
         return startNewConversation(playerName);
     }
     
     /**
-     * 获取最近的对话记录
+     * Load recent conversation records for the active session from persistence.
      */
     private List<ConversationRecord> getRecentConversation(String playerName, int limit) {
         String sessionId = getCurrentSessionId(playerName);
+        // Prefer in-memory cache for the active session
+        List<ConversationRecord> cached = conversationCache.get(playerName);
+        if (cached != null && !cached.isEmpty()) {
+            int from = Math.max(0, cached.size() - limit);
+            return new ArrayList<>(cached.subList(from, cached.size()));
+        }
+
         List<ConversationRecord> records = new ArrayList<>();
-        
         try (var session = MyBatisSupport.getFactory().openSession()) {
             ConversationMapper mapper = session.getMapper(ConversationMapper.class);
-            var rows = mapper.getRecent(playerName, sessionId, limit);
-            for (var r : rows) {
-                // 兼容大小写/别名差异，避免NPE
-                String type = toTextOrDefault(r, "message_type", "USER");
-                String content = toTextOrDefault(r, "content", "");
-                String ctx = toTextOrDefault(r, "context_data", "{}");
-
-                LocalDateTime ts = extractTimestamp(r);
-
+            List<ConversationRow> rows = mapper.getRecent(playerName, sessionId, limit);
+            for (ConversationRow r : rows) {
+                MessageType type = MessageType.from(r.getMessageType());
                 records.add(new ConversationRecord(
-                        sessionId,
+                        r.getSessionId(),
                         type,
-                        content,
-                        ts,
-                        ctx
+                        r.getMessageContent(),
+                        r.getTimestamp(),
+                        r.getContextData()
                 ));
             }
-            java.util.Collections.reverse(records);
+            Collections.reverse(records);
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("获取对话记录失败", e);
+            AusukaAiMod.LOGGER.error("Failed to load conversation records", e);
         }
-        
+
         return records;
     }
     
     /**
-     * 保存消息到数据库
+     * Persist a conversation message.
      */
-    private void saveMessage(String playerName, String sessionId, String messageType, String content, String contextData) {
+    private void persistMessage(String playerName, String sessionId, MessageType messageType, String content, String contextData) {
         try (var session = MyBatisSupport.getFactory().openSession(true)) {
             ConversationMapper mapper = session.getMapper(ConversationMapper.class);
-            mapper.insertMessage(playerName, sessionId, messageType, content, contextData);
+            mapper.insertMessage(playerName, sessionId, messageType.name(), content, contextData);
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("保存对话记录失败", e);
+            AusukaAiMod.LOGGER.error("Failed to save conversation record", e);
         }
     }
     
     /**
-     * 更新缓存
+     * Update in-memory cache for quick context assembly.
      */
     private void updateCache(String playerName, ConversationRecord record) {
         conversationCache.computeIfAbsent(playerName, k -> new ArrayList<>()).add(record);
         
-        // 保持缓存大小
+        // Keep cache size bounded
         List<ConversationRecord> cache = conversationCache.get(playerName);
         if (cache.size() > 50) {
-            cache.remove(0);
+            cache.removeFirst();
         }
     }
     
     /**
-     * 关闭数据库连接
+     * No-op: connection pool managed elsewhere.
      */
     public void shutdown() { /* Managed by pool, nothing to do */ }
 
     /**
-     * 清理指定玩家的会话状态与缓存（玩家下线时调用）
+     * Clear in-memory session and cache for a player (on logout).
      */
     public void clearSession(String playerName) {
         playerSessions.remove(playerName);
         conversationCache.remove(playerName);
     }
-    
-    // 不再暴露底层连接
-    
-    /**
-     * 对话记录数据类
-     */
-    public static class ConversationRecord {
-        public final String sessionId;
-        public final String messageType;
-        public final String content;
-        public final LocalDateTime timestamp;
-        public final String contextData;
-        
-        public ConversationRecord(String sessionId, String messageType, String content, 
-                                LocalDateTime timestamp, String contextData) {
-            this.sessionId = sessionId;
-            this.messageType = messageType;
-            this.content = content;
-            this.timestamp = timestamp;
-            this.contextData = contextData;
-        }
+
+    /** Conversation record .*/
+    public record ConversationRecord(String sessionId, MessageType messageType, String content, LocalDateTime timestamp,
+                                         String contextData) {
     }
 
-    // ----- helpers -----
-    private static String strOrDefault(Map<String, Object> row, String key, String def) {
-        Object v = row.get(key);
-        if (v == null) v = row.get(key.toUpperCase());
-        return v == null ? def : String.valueOf(v);
-    }
-
-    private static String toTextOrDefault(Map<String, Object> row, String key, String def) {
-        Object v = row.get(key);
-        if (v == null) v = row.get(key.toUpperCase());
-        return toText(v, def);
-    }
-
-    private static String toText(Object v, String def) {
-        if (v == null) return def;
-        try {
-            if (v instanceof java.sql.Clob clob) {
-                long len = clob.length();
-                if (len <= 0) return "";
-                return clob.getSubString(1, (int) Math.min(len, Integer.MAX_VALUE));
-            }
-            if (v instanceof java.sql.NClob nclob) {
-                long len = nclob.length();
-                if (len <= 0) return "";
-                return nclob.getSubString(1, (int) Math.min(len, Integer.MAX_VALUE));
-            }
-            return String.valueOf(v);
-        } catch (Exception e) {
-            return String.valueOf(v);
-        }
-    }
-
-    private static LocalDateTime extractTimestamp(Map<String, Object> row) {
-        // 优先使用标准键名，其次使用大写，若仍为空则回退到当前时间
-        Object v = row.get("timestamp");
-        if (v == null) v = row.get("TIMESTAMP");
-        // 兼容可能的别名
-        if (v == null) v = row.get("created_at");
-        if (v == null) v = row.get("CREATED_AT");
-
-        if (v instanceof java.sql.Timestamp ts) {
-            return ts.toLocalDateTime();
-        }
-        if (v instanceof java.time.LocalDateTime ldt) {
-            return ldt;
-        }
-        // 兜底：避免NPE导致聊天流程中断
-        return LocalDateTime.now();
-    }
-    
-    /**
-     * 位置数据类 - 用于位置记忆功能
-     */
-    public static class LocationData {
-        public final String name;
-        public final String world;
-        public final double x;
-        public final double y; 
-        public final double z;
-        public final String description;
-        
-        public LocationData(String name, String world, double x, double y, double z, String description) {
-            this.name = name;
-            this.world = world;
-            this.x = x;
-            this.y = y;
-            this.z = z;
-            this.description = description;
-        }
-        
+    /** Location data for location memory feature. */
+    public record LocationData(String name, String world, double x, double y, double z, String description) {
         public Vec3d toVec3d() {
-            return new Vec3d(x, y, z);
+                return new Vec3d(x, y, z);
         }
     }
     
-    // ==================== 位置记忆功能 ====================
+    // ==================== Location memory ====================
     
     /**
-     * 保存玩家位置记忆
+     * Save or update a player's named location.
      */
     public void saveLocation(String playerName, String locationName, String world, double x, double y, double z, String description) {
         try (var session = MyBatisSupport.getFactory().openSession(true)) {
             LocationMapper mapper = session.getMapper(LocationMapper.class);
             mapper.upsert(playerName, locationName, world, x, y, z, description);
-            AusukaAiMod.LOGGER.info("位置记忆已保存: {} - {} 在 {} ({}, {}, {})", playerName, locationName, world, x, y, z);
+            AusukaAiMod.LOGGER.info("Location memory saved: player={} name={} world={} ({}, {}, {})", playerName, locationName, world, x, y, z);
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("保存位置记忆失败", e);
+            AusukaAiMod.LOGGER.error("Failed to save location memory", e);
         }
     }
     
     /**
-     * 获取指定位置记忆 - 支持模糊匹配
+     * Get a location for teleport by exact or fuzzy name.
      */
     public LocationData getLocationForTeleport(String playerName, String destination) {
         // 首先尝试精确匹配
@@ -324,81 +236,81 @@ public class ConversationMemorySystem {
     }
     
     /**
-     * 精确匹配位置
+     * Exact location match.
      */
     private LocationData getExactLocation(String playerName, String locationName) {
         try (var session = MyBatisSupport.getFactory().openSession()) {
             LocationMapper mapper = session.getMapper(LocationMapper.class);
-            var row = mapper.getExact(playerName, locationName);
+            com.hinadt.persistence.model.LocationRow row = mapper.getExact(playerName, locationName);
             if (row != null) {
                 return new LocationData(
-                        (String) row.get("location_name"),
-                        (String) row.get("world"),
-                        ((Number) row.get("x")).doubleValue(),
-                        ((Number) row.get("y")).doubleValue(),
-                        ((Number) row.get("z")).doubleValue(),
-                        (String) row.get("description")
+                        row.getLocationName(),
+                        row.getWorld(),
+                        row.getX(),
+                        row.getY(),
+                        row.getZ(),
+                        row.getDescription()
                 );
             }
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("获取位置记忆失败", e);
+            AusukaAiMod.LOGGER.error("Failed to load location memory", e);
         }
         
         return null;
     }
     
     /**
-     * 模糊匹配位置
+     * Fuzzy location match.
      */
     private LocationData getFuzzyLocation(String playerName, String searchTerm) {
         try (var session = MyBatisSupport.getFactory().openSession()) {
             LocationMapper mapper = session.getMapper(LocationMapper.class);
-            var row = mapper.getFuzzy(playerName, "%" + searchTerm + "%");
+            com.hinadt.persistence.model.LocationRow row = mapper.getFuzzy(playerName, "%" + searchTerm + "%");
             if (row != null) {
                 return new LocationData(
-                        (String) row.get("location_name"),
-                        (String) row.get("world"),
-                        ((Number) row.get("x")).doubleValue(),
-                        ((Number) row.get("y")).doubleValue(),
-                        ((Number) row.get("z")).doubleValue(),
-                        (String) row.get("description")
+                        row.getLocationName(),
+                        row.getWorld(),
+                        row.getX(),
+                        row.getY(),
+                        row.getZ(),
+                        row.getDescription()
                 );
             }
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("模糊搜索位置失败", e);
+            AusukaAiMod.LOGGER.error("Failed to fuzzy search location", e);
         }
         
         return null;
     }
     
     /**
-     * 获取玩家所有位置记忆
+     * List all saved locations for a player.
      */
     public List<LocationData> getAllLocations(String playerName) {
         List<LocationData> locations = new ArrayList<>();
         
         try (var session = MyBatisSupport.getFactory().openSession()) {
             LocationMapper mapper = session.getMapper(LocationMapper.class);
-            var rows = mapper.getAll(playerName);
+            java.util.List<com.hinadt.persistence.model.LocationRow> rows = mapper.getAll(playerName);
             for (var r : rows) {
                 locations.add(new LocationData(
-                        (String) r.get("location_name"),
-                        (String) r.get("world"),
-                        ((Number) r.get("x")).doubleValue(),
-                        ((Number) r.get("y")).doubleValue(),
-                        ((Number) r.get("z")).doubleValue(),
-                        (String) r.get("description")
+                        r.getLocationName(),
+                        r.getWorld(),
+                        r.getX(),
+                        r.getY(),
+                        r.getZ(),
+                        r.getDescription()
                 ));
             }
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("获取所有位置记忆失败", e);
+            AusukaAiMod.LOGGER.error("Failed to list all locations", e);
         }
         
         return locations;
     }
     
     /**
-     * 删除位置记忆
+     * Delete a named location for a player.
      */
     public boolean deleteLocation(String playerName, String locationName) {
         try (var session = MyBatisSupport.getFactory().openSession(true)) {
@@ -406,7 +318,7 @@ public class ConversationMemorySystem {
             int deleted = mapper.delete(playerName, locationName);
             return deleted > 0;
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("删除位置记忆失败", e);
+            AusukaAiMod.LOGGER.error("Failed to delete location memory", e);
             return false;
         }
     }
