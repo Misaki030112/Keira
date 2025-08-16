@@ -4,3 +4,8 @@
 3. Do not use fully qualified class names, etc., and use the most elegant way
 4. When you write code, comments should be in English
 
+
+
+## Fabric MOD , User Code Rule
+1. When you use the fabric API, you should look at the fabric-related dependency versions in gradle.properties and choose the appropriate API
+2. The server language should be en_us, and the client language should be based on the client's own settings. Internationalization should be done well.
