@@ -3,6 +3,7 @@ package com.hinadt.tools;
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.ai.ConversationMemorySystem;
+import com.hinadt.observability.RequestContext;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.BlockPos;
@@ -54,6 +55,8 @@ public class MemoryTools {
         @ToolParam(description = "位置名称，如'家'、'农场'、'矿井'等") String locationName,
         @ToolParam(description = "位置的详细描述(可选)") String description
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:save_location] params player='{}' name='{}' desc='{}'",
+                RequestContext.midTag(), playerName, locationName, description);
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerName);
         if (player == null) {
             return "❌ 找不到玩家: " + playerName;
@@ -84,6 +87,8 @@ public class MemoryTools {
                 
                 result.set(String.format("✅ 已保存位置记忆：%s → %s (%d, %d, %d) 在 %s", 
                     locationName, finalDescription, pos.getX(), pos.getY(), pos.getZ(), worldName));
+                AusukaAiMod.LOGGER.debug("{} [tool:save_location] saved name='{}' world='{}' pos=({},{},{})",
+                        RequestContext.midTag(), locationName, worldName, pos.getX(), pos.getY(), pos.getZ());
                 
             } catch (Exception e) {
                 AusukaAiMod.LOGGER.error("保存位置记忆失败", e);
@@ -127,6 +132,8 @@ public class MemoryTools {
         @ToolParam(description = "要查找的位置名称或关键词") String locationName
     ) {
         try {
+            AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] params player='{}' name='{}'",
+                    RequestContext.midTag(), playerName, locationName);
             ConversationMemorySystem.LocationData location = 
                 AiRuntime.getConversationMemory().getLocationForTeleport(playerName, locationName);
             
@@ -134,12 +141,14 @@ public class MemoryTools {
                 return String.format("❌ 未找到玩家 %s 的位置记忆: %s", playerName, locationName);
             }
             
-            return String.format("📍 位置信息：\n" +
+            String out = String.format("📍 位置信息：\n" +
                 "名称: %s\n" +
                 "世界: %s\n" +
                 "坐标: (%.1f, %.1f, %.1f)\n" +
                 "描述: %s",
                 location.name, location.world, location.x, location.y, location.z, location.description);
+            AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] hit name='{}' world='{}'", RequestContext.midTag(), location.name, location.world);
+            return out;
                 
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("获取位置记忆失败", e);
@@ -168,6 +177,8 @@ public class MemoryTools {
         @ToolParam(description = "要查询位置记忆的玩家名称") String playerName
     ) {
         try {
+            AusukaAiMod.LOGGER.debug("{} [tool:list_saved_locations] params player='{}'",
+                    RequestContext.midTag(), playerName);
             List<ConversationMemorySystem.LocationData> locations = 
                 AiRuntime.getConversationMemory().getAllLocations(playerName);
             
@@ -187,6 +198,8 @@ public class MemoryTools {
                 result.append(String.format("   描述: %s\n\n", loc.description));
             }
             
+            AusukaAiMod.LOGGER.debug("{} [tool:list_saved_locations] return size={}",
+                    RequestContext.midTag(), locations.size());
             return result.toString();
             
         } catch (Exception e) {
@@ -216,9 +229,13 @@ public class MemoryTools {
         @ToolParam(description = "要删除的位置名称") String locationName
     ) {
         try {
+            AusukaAiMod.LOGGER.debug("{} [tool:delete_saved_location] params player='{}' name='{}'",
+                    RequestContext.midTag(), playerName, locationName);
             boolean deleted = AiRuntime.getConversationMemory().deleteLocation(playerName, locationName);
             
             if (deleted) {
+                AusukaAiMod.LOGGER.debug("{} [tool:delete_saved_location] deleted name='{}'",
+                        RequestContext.midTag(), locationName);
                 return String.format("✅ 已删除位置记忆：%s", locationName);
             } else {
                 return String.format("❌ 未找到要删除的位置记忆：%s", locationName);

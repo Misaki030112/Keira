@@ -102,6 +102,29 @@ public final class MyBatisSupport {
                     "in_chat BOOLEAN NOT NULL,\n" +
                     "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n" +
                     ")");
+
+            // Player profiles (aggregated per player)
+            s.executeUpdate("CREATE TABLE IF NOT EXISTS player_profiles (\n" +
+                    "uuid VARCHAR(64) PRIMARY KEY,\n" +
+                    "player_name VARCHAR(255) NOT NULL,\n" +
+                    "first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n" +
+                    "last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n" +
+                    "last_ip VARCHAR(128),\n" +
+                    "last_locale VARCHAR(32),\n" +
+                    "total_joins INT DEFAULT 0\n" +
+                    ")");
+            s.executeUpdate("CREATE INDEX IF NOT EXISTS idx_profiles_name ON player_profiles(player_name)");
+
+            // Player connection history (append-only)
+            s.executeUpdate("CREATE TABLE IF NOT EXISTS player_connections (\n" +
+                    "id IDENTITY PRIMARY KEY,\n" +
+                    "uuid VARCHAR(64) NOT NULL,\n" +
+                    "player_name VARCHAR(255) NOT NULL,\n" +
+                    "ip VARCHAR(128),\n" +
+                    "locale VARCHAR(32),\n" +
+                    "joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n" +
+                    ")");
+            s.executeUpdate("CREATE INDEX IF NOT EXISTS idx_conn_uuid_time ON player_connections(uuid, joined_at)");
         }
     }
 }

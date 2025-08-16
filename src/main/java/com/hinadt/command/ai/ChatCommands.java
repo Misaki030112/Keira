@@ -13,6 +13,7 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import static net.minecraft.server.command.CommandManager.argument;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -123,19 +124,23 @@ public final class ChatCommands {
             return 0;
         }
         String msg = StringArgumentType.getString(ctx, "message");
+        String messageId = UUID.randomUUID().toString();
         CompletableFuture
-            .supplyAsync(() -> AiServices.workflow().processPlayerMessage(player, msg),
+            .supplyAsync(() -> AiServices.workflow().processPlayerMessage(player, msg, messageId),
                     AiRuntime.AI_EXECUTOR)
             .orTimeout(60, TimeUnit.SECONDS)
             .whenComplete((response, ex) -> {
                 if (ex != null) {
-                    AusukaAiMod.LOGGER.warn("处理 /ai say 超时或失败: {}", ex.toString());
+                    AusukaAiMod.LOGGER.warn("[mid={}] 处理 /ai say 超时或失败: {}", messageId, ex.toString());
                     AiServices.server().execute(() -> Messages.to(player, Text.translatable("aim.say.error")));
                     return;
                 }
                 String out = (response == null || response.isEmpty())
                         ? "我没能给出回答，请换种说法再试试~"
                         : response;
+                String preview = out.substring(0, Math.min(180, out.length())).replaceAll("\n", " ");
+                AusukaAiMod.LOGGER.debug("[mid={}] [/ai say] 发送AI回复给玩家 player={}, len={}, preview='{}'",
+                        messageId, player.getName().getString(), out.length(), preview);
                 AiServices.server().execute(() -> Messages.to(player, Text.of("§b[Ausuka.ai] §f" + out)));
             });
         return 1;

@@ -10,6 +10,8 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import com.hinadt.AusukaAiMod;
+import com.hinadt.observability.RequestContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,6 +68,8 @@ public class McTools {
             @ToolParam(description ="返回条数上限，默认50，范围1~200")
             Integer limit
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:list_items] params query='{}' limit={}",
+                RequestContext.midTag(), query, limit);
         final String q = (query == null) ? "" : query.toLowerCase(Locale.ROOT);
         int cap = (limit == null) ? 50 : Math.max(1, Math.min(200, limit));
 
@@ -85,6 +89,7 @@ public class McTools {
 
             out.add(new ItemInfo(id.toString(), name, maxStack));
         }
+        AusukaAiMod.LOGGER.debug("{} [tool:list_items] return size={}", RequestContext.midTag(), out.size());
         return out;
     }
 
@@ -108,6 +113,8 @@ public class McTools {
             @ToolParam(description ="精确的Minecraft物品注册ID，例如 'minecraft:diamond_sword'，建议先用list_items搜索") String itemId,
             @ToolParam(description ="物品数量（1~640），系统会根据物品最大堆叠数自动智能分组") Integer count
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:give_item] params player='{}' itemId='{}' count={}",
+                RequestContext.midTag(), player, itemId, count);
         int n = (count == null) ? 1 : Math.max(1, Math.min(640, count));
 
         // 解析物品 ID
@@ -151,7 +158,9 @@ public class McTools {
             result.set("ok: gave=" + given + ", dropped=" + dropped);
         });
 
-        return result.get();
+        String ret = result.get();
+        AusukaAiMod.LOGGER.debug("{} [tool:give_item] return '{}'", RequestContext.midTag(), ret);
+        return ret;
     }
 
     /* ===================== 工具内部辅助 ===================== */

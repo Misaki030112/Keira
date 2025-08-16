@@ -1,16 +1,17 @@
 package com.hinadt.tools;
 
 import com.hinadt.ai.ModAdminSystem;
+import com.hinadt.observability.RequestContext;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.network.packet.s2c.play.PositionFlag;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -62,6 +63,8 @@ public class AdminTools {
         @ToolParam(description = "要踢出的玩家名称") String targetPlayerName,
         @ToolParam(description = "踢出原因，可选") String reason
     ) {
+        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:kick_player] params admin='{}' target='{}' reason='{}'",
+                RequestContext.midTag(), adminName, targetPlayerName, reason);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(
             adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "踢出玩家");
@@ -111,6 +114,8 @@ public class AdminTools {
         @ToolParam(description = "要封禁的玩家名称") String targetPlayerName,
         @ToolParam(description = "封禁原因，可选") String reason
     ) {
+        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:ban_player] params admin='{}' target='{}' reason='{}'",
+                RequestContext.midTag(), adminName, targetPlayerName, reason);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(
             adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "封禁玩家");
@@ -165,6 +170,8 @@ public class AdminTools {
         @ToolParam(description = "要冻结的玩家名称") String targetPlayerName,
         @ToolParam(description = "是否冻结，true为冻结，false为解冻") boolean freeze
     ) {
+        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:freeze_player] params admin='{}' target='{}' freeze={}",
+                RequestContext.midTag(), adminName, targetPlayerName, freeze);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(
             adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "冻结/解冻玩家");
@@ -218,6 +225,8 @@ public class AdminTools {
         @ToolParam(description = "目标Z坐标，如果传送到玩家则可选") Double z,
         @ToolParam(description = "目标玩家名称，如果传送到坐标则可选") String targetLocation
     ) {
+        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:teleport_player_force] params admin='{}' target='{}' to=({}, {}, {}) destPlayer='{}'",
+                RequestContext.midTag(), adminName, targetPlayerName, x, y, z, targetLocation);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(
             adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "强制传送玩家");
@@ -239,7 +248,7 @@ public class AdminTools {
                 }
                 
                 Vec3d destPos = destinationPlayer.getPos();
-                targetPlayer.teleport(targetPlayer.getWorld(), destPos.x, destPos.y, destPos.z, java.util.Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
+                targetPlayer.teleport(targetPlayer.getWorld(), destPos.x, destPos.y, destPos.z, Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
                 
                 targetPlayer.sendMessage(Text.of("§e[管理] 你被传送到 " + targetLocation + " 身边"));
                 
@@ -247,7 +256,7 @@ public class AdminTools {
                 
             } else if (x != null && y != null && z != null) {
                 // 传送到指定坐标（同世界）
-                targetPlayer.teleport(targetPlayer.getWorld(), x, y, z, java.util.Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
+                targetPlayer.teleport(targetPlayer.getWorld(), x, y, z, Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
                 
                 targetPlayer.sendMessage(Text.of(String.format("§e[管理] 你被传送到坐标 (%.1f, %.1f, %.1f)", x, y, z)));
                 
@@ -278,6 +287,8 @@ public class AdminTools {
         @ToolParam(description = "是否监禁，true为监禁，false为释放") boolean jail,
         @ToolParam(description = "监禁原因，可选") String reason
     ) {
+        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:jail_player] params admin='{}' target='{}' jail={} reason='{}'",
+                RequestContext.midTag(), adminName, targetPlayerName, jail, reason);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(
             adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "监禁/释放玩家");
@@ -303,7 +314,7 @@ public class AdminTools {
             jailedPlayers.put(targetPlayerName, new JailInfo(originalPos, reason));
             
             // 传送到监狱（同世界）
-            targetPlayer.teleport(targetPlayer.getWorld(), jailPos.x, jailPos.y, jailPos.z, java.util.Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
+            targetPlayer.teleport(targetPlayer.getWorld(), jailPos.x, jailPos.y, jailPos.z, Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
             
             String jailReason = reason != null ? reason : "违反服务器规则";
             targetPlayer.sendMessage(Text.of("§c[系统] 你已被监禁：" + jailReason));
@@ -318,7 +329,7 @@ public class AdminTools {
             
             // 传送回原位置（同世界）
             Vec3d originalPos = jailInfo.originalPosition;
-            targetPlayer.teleport(targetPlayer.getWorld(), originalPos.x, originalPos.y, originalPos.z, java.util.Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
+            targetPlayer.teleport(targetPlayer.getWorld(), originalPos.x, originalPos.y, originalPos.z, Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
             
             targetPlayer.sendMessage(Text.of("§a[系统] 你已被释放，请遵守服务器规则"));
             

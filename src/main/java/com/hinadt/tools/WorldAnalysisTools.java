@@ -1,6 +1,7 @@
 package com.hinadt.tools;
 
 import com.hinadt.AusukaAiMod;
+import com.hinadt.observability.RequestContext;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
@@ -65,6 +66,8 @@ public class WorldAnalysisTools {
         @ToolParam(description = "要分析环境的玩家名称") String playerName,
         @ToolParam(description = "分析半径，默认16格") Integer radius
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:analyze_surroundings] params player='{}' radius={}",
+                RequestContext.midTag(), playerName, radius);
         ServerPlayerEntity player = findPlayer(playerName);
         if (player == null) {
             return "❌ 找不到玩家：" + playerName;
@@ -123,6 +126,8 @@ public class WorldAnalysisTools {
                 }
                 
                 result.set(analysis.toString());
+                AusukaAiMod.LOGGER.debug("{} [tool:analyze_surroundings] analyzed biome='{}' radius={}",
+                        RequestContext.midTag(), biomeName, searchRadius);
                 
             } catch (Exception e) {
                 result.set("❌ 分析环境时出错：" + e.getMessage());
@@ -145,6 +150,8 @@ public class WorldAnalysisTools {
         @ToolParam(description = "资源类型：ore(矿物)、wood(木材)、water(水源)、village(村庄)等") String resourceType,
         @ToolParam(description = "搜索半径，默认32格") Integer radius
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:find_resources] params player='{}' type='{}' radius={}",
+                RequestContext.midTag(), playerName, resourceType, radius);
         ServerPlayerEntity player = findPlayer(playerName);
         if (player == null) {
             return "❌ 找不到玩家：" + playerName;
@@ -181,6 +188,8 @@ public class WorldAnalysisTools {
                     }
                     
                     result.set(report.toString());
+                    AusukaAiMod.LOGGER.debug("{} [tool:find_resources] found={} type='{}'",
+                            RequestContext.midTag(), foundPositions.size(), resourceType);
                 }
                 
             } catch (Exception e) {

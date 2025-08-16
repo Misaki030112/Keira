@@ -1,6 +1,7 @@
 package com.hinadt.tools;
 
 import com.hinadt.AusukaAiMod;
+import com.hinadt.observability.RequestContext;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -56,6 +57,8 @@ public class WeatherTools {
         @ToolParam(description = "持续时间（秒），可选，默认600秒（10分钟）") Integer duration,
         @ToolParam(description = "目标世界，可选：overworld(主世界)、nether(下界)、end(末地)，默认主世界") String world
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:change_weather] params type='{}' duration={} world='{}'",
+                RequestContext.midTag(), weatherType, duration, world);
         ServerWorld targetWorld = getTargetWorld(world);
         if (targetWorld == null) {
             targetWorld = server.getOverworld();
@@ -100,6 +103,8 @@ public class WeatherTools {
                     Text.of("[Ausuka.ai] " + result.get() + " (世界: " + worldName + ")"), 
                     false
                 );
+                AusukaAiMod.LOGGER.debug("{} [tool:change_weather] result='{}' world='{}'",
+                        RequestContext.midTag(), result.get(), worldName);
                 
             } catch (Exception e) {
                 String errorMsg = "天气变更失败：" + e.getMessage();
@@ -126,6 +131,8 @@ public class WeatherTools {
         @ToolParam(description = "时间类型：day/白天、night/夜晚、noon/正午、midnight/午夜，或具体数字(0-24000)") String timeType,
         @ToolParam(description = "目标世界，可选：overworld(主世界)、nether(下界)、end(末地)，默认主世界") String world
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:set_time] params type='{}' world='{}'",
+                RequestContext.midTag(), timeType, world);
         ServerWorld targetWorld = getTargetWorld(world);
         if (targetWorld == null) {
             targetWorld = server.getOverworld();
@@ -154,6 +161,8 @@ public class WeatherTools {
                     Text.of("[Ausuka.ai] " + result.get()), 
                     false
                 );
+                AusukaAiMod.LOGGER.debug("{} [tool:set_time] result='{}'",
+                        RequestContext.midTag(), result.get());
                 
             } catch (Exception e) {
                 String errorMsg = "时间设置失败：" + e.getMessage();

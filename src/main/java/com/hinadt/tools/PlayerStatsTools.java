@@ -1,9 +1,12 @@
 package com.hinadt.tools;
 
 import com.hinadt.AusukaAiMod;
+import com.hinadt.observability.RequestContext;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.World;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -48,6 +51,8 @@ public class PlayerStatsTools {
     public String getPlayerInfo(
         @ToolParam(description = "玩家名称") String playerName
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:get_player_info] params player='{}'",
+                RequestContext.midTag(), playerName);
         ServerPlayerEntity player = findPlayer(playerName);
         if (player == null) {
             return "❌ 找不到玩家：" + playerName;
@@ -70,6 +75,8 @@ public class PlayerStatsTools {
             result.set(info.toString());
         });
         
+        AusukaAiMod.LOGGER.debug("{} [tool:get_player_info] world='{}'",
+                RequestContext.midTag(), getWorldDisplayName(player.getWorld()));
         return result.get();
     }
     
@@ -98,6 +105,8 @@ public class PlayerStatsTools {
     public String healPlayer(
         @ToolParam(description = "要治疗的玩家名称") String playerName
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:heal_player] params player='{}'",
+                RequestContext.midTag(), playerName);
         ServerPlayerEntity player = findPlayer(playerName);
         if (player == null) {
             return "❌ 找不到玩家：" + playerName;
@@ -118,6 +127,8 @@ public class PlayerStatsTools {
                 String message = "✅ 已治疗玩家 " + player.getName().getString() + "（生命值和饥饿值已恢复满值）";
                 player.sendMessage(Text.of("§b[Ausuka.ai] §f" + message));
                 result.set(message);
+                AusukaAiMod.LOGGER.debug("{} [tool:heal_player] done player='{}'",
+                        RequestContext.midTag(), player.getName().getString());
                 
             } catch (Exception e) {
                 String errorMsg = "❌ 治疗失败：" + e.getMessage();
@@ -177,6 +188,8 @@ public class PlayerStatsTools {
             }
             
             result.set(info.toString());
+            AusukaAiMod.LOGGER.debug("{} [tool:list_online_players] count={}",
+                    RequestContext.midTag(), players.size());
         });
         
         return result.get();
@@ -208,6 +221,8 @@ public class PlayerStatsTools {
         @ToolParam(description = "目标玩家名称") String targetPlayer,
         @ToolParam(description = "要发送的消息内容") String message
     ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:send_message_to_player] params target='{}' msgLen={}",
+                RequestContext.midTag(), targetPlayer, message == null ? 0 : message.length());
         ServerPlayerEntity player = findPlayer(targetPlayer);
         if (player == null) {
             return "❌ 找不到玩家：" + targetPlayer;
@@ -219,6 +234,8 @@ public class PlayerStatsTools {
             try {
                 player.sendMessage(Text.of("§e[Ausuka.ai 私信] §f" + message));
                 result.set("✅ 已向 " + targetPlayer + " 发送私信：" + message);
+                AusukaAiMod.LOGGER.debug("{} [tool:send_message_to_player] sent target='{}'",
+                        RequestContext.midTag(), targetPlayer);
                 
             } catch (Exception e) {
                 String errorMsg = "❌ 发送消息失败：" + e.getMessage();
@@ -230,10 +247,10 @@ public class PlayerStatsTools {
         return result.get();
     }
     
-    private String getWorldDisplayName(net.minecraft.server.world.ServerWorld world) {
-        if (world.getRegistryKey() == net.minecraft.world.World.OVERWORLD) return "主世界";
-        if (world.getRegistryKey() == net.minecraft.world.World.NETHER) return "下界";
-        if (world.getRegistryKey() == net.minecraft.world.World.END) return "末地";
+    private String getWorldDisplayName(ServerWorld world) {
+        if (world.getRegistryKey() == World.OVERWORLD) return "主世界";
+        if (world.getRegistryKey() == World.NETHER) return "下界";
+        if (world.getRegistryKey() == World.END) return "末地";
         return world.getRegistryKey().getValue().toString();
     }
     

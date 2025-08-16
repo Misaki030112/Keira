@@ -2,6 +2,7 @@ package com.hinadt.mixin;
 
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
+import com.hinadt.persistence.PlayerTelemetryRecorder;
 import net.minecraft.network.ClientConnection;
 import com.hinadt.tools.Messages;
 import net.minecraft.server.PlayerManager;
@@ -18,6 +19,12 @@ public class PlayerJoinMixin {
     
     @Inject(method = "onPlayerConnect", at = @At("TAIL"))
     private void onPlayerJoin(ClientConnection connection, ServerPlayerEntity player, ConnectedClientData clientData, CallbackInfo ci) {
+        // 记录玩家加入时的客户端信息（语言、IP等）
+        try {
+            PlayerTelemetryRecorder.recordJoin(player, connection, clientData);
+        } catch (Exception e) {
+            AusukaAiMod.LOGGER.warn("记录玩家连接信息出错: " + e.getMessage());
+        }
         // 延迟发送AI生成的欢迎消息
         player.getServer().execute(() -> {
             try {

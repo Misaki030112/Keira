@@ -5,6 +5,8 @@ import com.hinadt.ai.context.PlayerContextBuilder;
 import com.hinadt.ai.prompt.PromptComposer;
 import com.hinadt.ai.tools.ToolRegistry;
 import com.hinadt.tools.AdminTools;
+import com.hinadt.observability.RequestContext;
+import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 
@@ -28,7 +30,16 @@ public class AiWorkflowManager {
     }
 
     public String processPlayerMessage(ServerPlayerEntity player, String message) {
+        // 兼容旧调用：自动生成 messageId
+        return processPlayerMessage(player, message, UUID.randomUUID().toString());
+    }
+
+    /**
+     * 带 messageId 的消息处理，用于端到端观测与溯源
+     */
+    public String processPlayerMessage(ServerPlayerEntity player, String message, String messageId) {
         try {
+            RequestContext.setMessageId(messageId);
             if (!AiRuntime.isReady()) {
                 return "⚠️ AI未配置或不可用。请配置 API 密钥后重试。";
             }
@@ -36,6 +47,7 @@ public class AiWorkflowManager {
 
             // 记录用户消息
             memorySystem.saveUserMessage(playerName, message);
+            AusukaAiMod.LOGGER.debug("{} [workflow] 记录用户消息 player={}, len={}", RequestContext.midTag(), playerName, message.length());
 
             // 上下文
             String detailedContext = contextBuilder.build(player);
@@ -65,6 +77,7 @@ public class AiWorkflowManager {
             // 服务器端日志：记录请求开始与耗时，方便排查“给我一把钻石剑”等慢请求
             long start = System.currentTimeMillis();
             AusukaAiMod.LOGGER.info("AI请求开始: 玩家={}, 内容='{}'", playerName, message);
+            AusukaAiMod.LOGGER.debug("{} [workflow] 调用AI前上下文就绪 tools=[mc, tp, memory, weather, stats, world, admin] sysPromptLen={}", RequestContext.midTag(), systemPrompt.length());
 
             // 一次性 AI 调用 + 工具注册（正确区分 system / user）
             String aiResponse = AiRuntime.AIClient
@@ -89,6 +102,9 @@ public class AiWorkflowManager {
             } else {
                 AusukaAiMod.LOGGER.info("AI请求完成: 玩家={}, 耗时={}ms", playerName, cost);
             }
+            int respLen = aiResponse == null ? 0 : aiResponse.length();
+            String preview = aiResponse == null ? "" : aiResponse.substring(0, Math.min(180, aiResponse.length())).replaceAll("\n", " ");
+            AusukaAiMod.LOGGER.debug("{} [workflow] AI返回 len={}, preview='{}'", RequestContext.midTag(), respLen, preview);
 
             memorySystem.saveAiResponse(playerName, aiResponse);
             return aiResponse;
@@ -96,6 +112,8 @@ public class AiWorkflowManager {
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("处理玩家消息时出错: " + e.getMessage(), e);
             return "😅 抱歉，我在处理你的请求时遇到了一些技术问题。请稍后再试，或者尝试用不同的方式描述你的需求。";
+        } finally {
+            RequestContext.clear();
         }
     }
 

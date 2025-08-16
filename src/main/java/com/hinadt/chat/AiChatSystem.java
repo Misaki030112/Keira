@@ -7,6 +7,7 @@ import com.hinadt.tools.Messages;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import java.util.UUID;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -39,16 +40,17 @@ public class AiChatSystem {
 
     private static void handleAiChatMessage(ServerPlayerEntity player, String message) {
         String playerName = player.getName().getString();
-        AusukaAiMod.LOGGER.debug("[AI] 收到聊天消息: player={}, msg='{}'", playerName, message);
+        String messageId = UUID.randomUUID().toString();
+        AusukaAiMod.LOGGER.debug("[mid={}] [chat] 收到玩家消息: player={}, msg='{}'", messageId, playerName, message);
 
         // Process on dedicated pool with a guard timeout, switch back to main thread to reply
         CompletableFuture
-            .supplyAsync(() -> AiServices.workflow().processPlayerMessage(player, message),
+            .supplyAsync(() -> AiServices.workflow().processPlayerMessage(player, message, messageId),
                     AiRuntime.AI_EXECUTOR)
             .orTimeout(60, TimeUnit.SECONDS)
             .whenComplete((response, ex) -> {
                 if (ex != null) {
-                    AusukaAiMod.LOGGER.warn("[AI] 处理消息失败/超时: player={}, err={}", playerName, ex.toString());
+                    AusukaAiMod.LOGGER.warn("[mid={}] [chat] 处理消息失败/超时: player={}, err={}", messageId, playerName, ex.toString());
                     AiServices.server().execute(() ->
                             Messages.to(player, Text.of("§c[Ausuka.ai] 响应超时或出错了，请稍后再试。"))
                     );
@@ -58,6 +60,10 @@ public class AiChatSystem {
                 String out = (response == null || response.isEmpty())
                         ? "超时，我没能给出回答，请换种说法再试试~"
                         : response;
+
+                String preview = out.substring(0, Math.min(180, out.length())).replaceAll("\n", " ");
+                AusukaAiMod.LOGGER.debug("[mid={}] [chat] 发送AI回复给玩家 player={}, len={}, preview='{}'",
+                        messageId, playerName, out.length(), preview);
 
                 AiServices.server().execute(() ->
                         Messages.to(player, Text.of("§b[Ausuka.ai] §f" + out))
