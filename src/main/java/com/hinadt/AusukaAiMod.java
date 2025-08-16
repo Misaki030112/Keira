@@ -28,38 +28,38 @@ public class AusukaAiMod implements ModInitializer {
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.
 
-        LOGGER.info("🤖 Ausuka.ai Mod 正在加载中...");
+        LOGGER.info("🤖 Ausuka.ai Mod is loading...");
 
         // Register commands early so Brigadier has them when server builds the tree
         try {
             AiCommandRegistry.initialize();
-            LOGGER.info("✅ 命令注册回调已挂载");
+            LOGGER.info("✅ Command registration callback attached");
         } catch (Exception e) {
-            LOGGER.error("❌ 命令注册初始化失败", e);
+            LOGGER.error("❌ Failed to initialize command registration", e);
         }
 
 		// Initialize AI when server starts
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-			LOGGER.info("🚀 服务器启动，正在初始化AI驱动系统...");
+			LOGGER.info("🚀 Server started, initializing AI-driven system...");
 			try {
-				// 初始化AI运行时
+				// Initialize AI runtime
 				AiRuntime.init();
-				LOGGER.info("✅ AI运行时初始化完成");
-				
-                // 初始化服务容器与AI聊天系统（监听等）
+				LOGGER.info("✅ AI runtime initialized");
+
+                // Initialize service container and AI chat system (listeners, etc.)
                 AiServices.initialize(server);
                 AiChatSystem.initialize();
-                LOGGER.info("✅ AI聊天系统与命令注册完成");
+                LOGGER.info("✅ AI chat system and command registration completed");
 
-                // 会话状态仅在内存中维护，无需数据库清理
-				
-				// 初始化智能自动消息系统
+                // Session state is maintained in memory only; no database cleanup required
+
+				// Initialize intelligent auto message system
 				IntelligentAutoMessageSystem.initialize(server);
-				LOGGER.info("✅ 智能自动消息系统初始化完成");
-				
-				LOGGER.info("🎉 Ausuka.ai Mod 系统初始化完成！");
-				
-				// 发送启动欢迎消息
+				LOGGER.info("✅ Intelligent auto message system initialized");
+
+				LOGGER.info("🎉 Ausuka.ai Mod system initialization completed!");
+
+				// Send a startup welcome message
                 server.execute(() ->
                     Messages.broadcast(
                         server,
@@ -68,18 +68,18 @@ public class AusukaAiMod implements ModInitializer {
                 );
 				
 			} catch (Exception e) {
-				LOGGER.error("❌ AI系统初始化失败: " + e.getMessage(), e);
+				LOGGER.error("❌ Failed to initialize AI system: " + e.getMessage(), e);
 			}
 		});
 
 		// Cleanup when server stops
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-			LOGGER.info("🔄 服务器停止，正在清理AI系统...");
+			LOGGER.info("🔄 Server stopping, cleaning up AI system...");
 			IntelligentAutoMessageSystem.shutdown();
 			AiRuntime.shutdown();
-			LOGGER.info("✅ AI系统清理完成");
+			LOGGER.info("✅ AI system cleanup completed");
 		});
 
-		LOGGER.info("✨ Ausuka.ai Mod 加载完成！");
+		LOGGER.info("✨ Ausuka.ai Mod loaded!");
 	}
 }

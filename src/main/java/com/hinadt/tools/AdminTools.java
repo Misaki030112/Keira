@@ -1,10 +1,11 @@
 package com.hinadt.tools;
 
+import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.ModAdminSystem;
 import com.hinadt.observability.RequestContext;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 import org.springframework.ai.tool.annotation.Tool;
@@ -63,7 +64,7 @@ public class AdminTools {
         @ToolParam(description = "要踢出的玩家名称") String targetPlayerName,
         @ToolParam(description = "踢出原因，可选") String reason
     ) {
-        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:kick_player] params admin='{}' target='{}' reason='{}'",
+        AusukaAiMod.LOGGER.debug("{} [tool:kick_player] params admin='{}' target='{}' reason='{}'",
                 RequestContext.midTag(), adminName, targetPlayerName, reason);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(
@@ -114,7 +115,7 @@ public class AdminTools {
         @ToolParam(description = "要封禁的玩家名称") String targetPlayerName,
         @ToolParam(description = "封禁原因，可选") String reason
     ) {
-        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:ban_player] params admin='{}' target='{}' reason='{}'",
+        AusukaAiMod.LOGGER.debug("{} [tool:ban_player] params admin='{}' target='{}' reason='{}'",
                 RequestContext.midTag(), adminName, targetPlayerName, reason);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(
@@ -170,7 +171,7 @@ public class AdminTools {
         @ToolParam(description = "要冻结的玩家名称") String targetPlayerName,
         @ToolParam(description = "是否冻结，true为冻结，false为解冻") boolean freeze
     ) {
-        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:freeze_player] params admin='{}' target='{}' freeze={}",
+        AusukaAiMod.LOGGER.debug("{} [tool:freeze_player] params admin='{}' target='{}' freeze={}",
                 RequestContext.midTag(), adminName, targetPlayerName, freeze);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(
@@ -225,7 +226,7 @@ public class AdminTools {
         @ToolParam(description = "目标Z坐标，如果传送到玩家则可选") Double z,
         @ToolParam(description = "目标玩家名称，如果传送到坐标则可选") String targetLocation
     ) {
-        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:teleport_player_force] params admin='{}' target='{}' to=({}, {}, {}) destPlayer='{}'",
+        AusukaAiMod.LOGGER.debug("{} [tool:teleport_player_force] params admin='{}' target='{}' to=({}, {}, {}) destPlayer='{}'",
                 RequestContext.midTag(), adminName, targetPlayerName, x, y, z, targetLocation);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(
@@ -287,7 +288,7 @@ public class AdminTools {
         @ToolParam(description = "是否监禁，true为监禁，false为释放") boolean jail,
         @ToolParam(description = "监禁原因，可选") String reason
     ) {
-        com.hinadt.AusukaAiMod.LOGGER.debug("{} [tool:jail_player] params admin='{}' target='{}' jail={} reason='{}'",
+        AusukaAiMod.LOGGER.debug("{} [tool:jail_player] params admin='{}' target='{}' jail={} reason='{}'",
                 RequestContext.midTag(), adminName, targetPlayerName, jail, reason);
         // 权限验证
         String permissionCheck = modAdminSystem.checkPermissionWithMessage(

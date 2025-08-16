@@ -2,7 +2,6 @@ package com.hinadt.tools;
 
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
-import com.hinadt.ai.ConversationMemorySystem;
 import com.hinadt.observability.RequestContext;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -10,7 +9,6 @@ import net.minecraft.util.math.BlockPos;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 

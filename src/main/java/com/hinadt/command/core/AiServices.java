@@ -1,5 +1,6 @@
 package com.hinadt.command.core;
 
+import com.hinadt.ai.AiConfig;
 import com.hinadt.ai.AiWorkflowManager;
 import net.minecraft.server.MinecraftServer;
 
@@ -15,6 +16,8 @@ public final class AiServices {
 
     public static void initialize(MinecraftServer srv) {
         server = srv;
+        // Attach server to AiConfig so it can read server.properties at lowest priority
+        AiConfig.attachServer(server);
         if (workflowManager == null) {
             workflowManager = new AiWorkflowManager(server);
         }

@@ -1,19 +1,21 @@
 package com.hinadt.ai;
 
+import com.hinadt.AusukaAiMod;
+import com.hinadt.observability.LoggingContextPropagation;
+import com.hinadt.persistence.MyBatisSupport;
+import net.minecraft.server.MinecraftServer;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.deepseek.api.DeepSeekApi;
-import com.hinadt.AusukaAiMod;
-import net.minecraft.server.MinecraftServer;
-import com.hinadt.persistence.MyBatisSupport;
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * AI运行时系统 - 支持多种AI模型提供商
- * 支持DeepSeek、OpenAI、Claude等主流AI服务
+ * AI runtime system - supports multiple AI model providers
+ * Supports mainstream AI services such as DeepSeek, OpenAI, Claude, etc.
  */
 public final class AiRuntime {
     public static ChatClient AIClient;
@@ -23,7 +25,7 @@ public final class AiRuntime {
     public static ExecutorService AI_EXECUTOR;
     
     /**
-     * 支持的AI提供商类型
+     * Supported AI provider types
      */
     public enum AiProvider {
         DEEPSEEK("deepseek", "DEEPSEEK_API_KEY"),
@@ -44,15 +46,18 @@ public final class AiRuntime {
     }
 
     public static void init() {
-        // 预加载配置
+        // Preload configuration
         AiConfig.load();
 
-        // 自动检测可用的AI提供商
+        // Install Reactor context propagation so RequestContext/MDC survive thread switches
+        LoggingContextPropagation.install();
+
+        // Auto-detect available AI provider
         AiProvider selectedProvider = detectAvailableProvider();
         ChatModel model = createChatModel(selectedProvider);
 
         if (model == null) {
-            AusukaAiMod.LOGGER.warn("未能初始化AI模型，AI功能将被禁用。请在环境变量、JVM参数或配置文件中提供API密钥。");
+            AusukaAiMod.LOGGER.warn("Failed to initialize AI model; AI features will be disabled. Provide API keys via environment variables, JVM args, or config file.");
         } else {
             AIClient = ChatClient.builder(model).build();
         }
@@ -67,57 +72,57 @@ public final class AiRuntime {
             });
         }
 
-        // 初始化持久层（建表等）并初始化对话记忆系统
+        // Initialize persistence layer (schema, etc.) and conversation memory system
         MyBatisSupport.init();
         conversationMemory = new ConversationMemorySystem();
         
-        // ModAdminSystem 需要MinecraftServer，将在第一次访问时延迟初始化
-        
+        // ModAdminSystem requires MinecraftServer; will be lazily initialized on first access
+
         if (AIClient != null) {
-            AusukaAiMod.LOGGER.info("AI运行时初始化完成，使用提供商: {}", selectedProvider.getName());
+            AusukaAiMod.LOGGER.info("AI runtime initialized, provider: {}", selectedProvider.getName());
         } else {
-            AusukaAiMod.LOGGER.info("AI运行时初始化完成（AI未启用）");
+            AusukaAiMod.LOGGER.info("AI runtime initialized (AI disabled)");
         }
     }
     
     /**
-     * 自动检测可用的AI提供商
-     * 按优先级顺序检查环境变量
+     * Auto-detect available AI provider
+     * Check environment variables by priority
      */
     private static AiProvider detectAvailableProvider() {
-        // 首先尊重显式配置
+        // Respect explicit configuration first
         String preferred = AiConfig.getPreferredProvider();
         if (preferred != null) {
             for (AiProvider p : AiProvider.values()) {
                 if (p.getName().equalsIgnoreCase(preferred)) {
-                    AusukaAiMod.LOGGER.info("配置指定AI提供商: {}", p.getName());
+                    AusukaAiMod.LOGGER.info("Configured AI provider: {}", p.getName());
                     return p;
                 }
             }
-            AusukaAiMod.LOGGER.warn("未知AI_PROVIDER='{}'，将自动检测", preferred);
+            AusukaAiMod.LOGGER.warn("Unknown AI_PROVIDER='{}', falling back to auto-detection", preferred);
         }
 
-        // 按优先级检查
+        // Check in priority order
         for (AiProvider provider : AiProvider.values()) {
             String apiKey = AiConfig.get(provider.getEnvKeyName());
             if (apiKey != null && !apiKey.trim().isEmpty()) {
-                AusukaAiMod.LOGGER.info("检测到 {} API密钥，将使用此提供商", provider.getName());
+                AusukaAiMod.LOGGER.info("Detected {} API key; using this provider", provider.getName());
                 return provider;
             }
         }
 
-        AusukaAiMod.LOGGER.warn("未检测到任何AI提供商的API密钥！");
-        return AiProvider.DEEPSEEK; // 默认回退
+        AusukaAiMod.LOGGER.warn("No AI provider API key detected!");
+        return AiProvider.DEEPSEEK; // default fallback
     }
     
     /**
-     * 根据提供商类型创建ChatModel
+     * Create ChatModel based on provider type
      */
     private static ChatModel createChatModel(AiProvider provider) {
         String apiKey = AiConfig.get(provider.getEnvKeyName());
 
         if (apiKey == null || apiKey.trim().isEmpty()) {
-            AusukaAiMod.LOGGER.warn("提供商 {} 的API密钥未设置", provider.getName());
+            AusukaAiMod.LOGGER.warn("API key for provider {} is not set", provider.getName());
             return null;
         }
         
@@ -127,37 +132,36 @@ public final class AiRuntime {
                     return createDeepSeekModel(apiKey);
                     
                 case OPENAI:
-                    // TODO: 添加OpenAI支持
+                    // TODO: add OpenAI support
                     // return createOpenAiModel(apiKey);
-                    AusukaAiMod.LOGGER.warn("OpenAI支持尚未实现，回退到DeepSeek");
+                    AusukaAiMod.LOGGER.warn("OpenAI support not implemented yet; falling back to DeepSeek");
                     return createDeepSeekModel(AiConfig.get("DEEPSEEK_API_KEY"));
                     
                 case CLAUDE:
-                    // TODO: 添加Claude支持
+                    // TODO: add Claude support
                     // return createClaudeModel(apiKey);
-                    AusukaAiMod.LOGGER.warn("Claude支持尚未实现，回退到DeepSeek");
+                    AusukaAiMod.LOGGER.warn("Claude support not implemented yet; falling back to DeepSeek");
                     return createDeepSeekModel(AiConfig.get("DEEPSEEK_API_KEY"));
                     
                 default:
-                    AusukaAiMod.LOGGER.warn("未知的AI提供商: {}", provider.getName());
+                    AusukaAiMod.LOGGER.warn("Unknown AI provider: {}", provider.getName());
                     return null;
             }
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("创建 {} 模型失败", provider.getName(), e);
+            AusukaAiMod.LOGGER.error("Failed to create {} model", provider.getName(), e);
             return null;
         }
     }
     
     /**
-     * 创建DeepSeek模型实例
+     * Create DeepSeek model instance
      */
     private static ChatModel createDeepSeekModel(String apiKey) {
         var api = DeepSeekApi.builder().apiKey(apiKey).build();
 
         var options = DeepSeekChatOptions.builder()
                 .model("deepseek-chat")
-                .temperature(0.7)  // 添加一些创造性
-                .maxTokens(4000)   // 控制输出长度
+                .temperature(0.7)  // add some creativity
                 .build();
 
         return DeepSeekChatModel.builder()
@@ -166,49 +170,49 @@ public final class AiRuntime {
                 .build();
     }
     
-    // TODO: 实现其他AI提供商
+    // TODO: implement other AI providers
     /*
     private static ChatModel createOpenAiModel(String apiKey) {
         // OpenAI implementation when spring-ai-openai is available
-        throw new UnsupportedOperationException("OpenAI支持开发中");
+        throw new UnsupportedOperationException("OpenAI support under development");
     }
     
     private static ChatModel createClaudeModel(String apiKey) {
         // Claude implementation when spring-ai-claude is available  
-        throw new UnsupportedOperationException("Claude支持开发中");
+        throw new UnsupportedOperationException("Claude support under development");
     }
     */
     
     /**
-     * 获取对话记忆系统
+     * Get conversation memory system
      */
     public static ConversationMemorySystem getConversationMemory() {
         return conversationMemory;
     }
     
     /**
-     * 获取MOD管理员系统 - 延迟初始化
+     * Get MOD admin system - lazy initialization
      */
     public static ModAdminSystem getModAdminSystem() {
         return modAdminSystem;
     }
     
     /**
-     * 初始化MOD管理员系统（需要服务器实例）
+     * Initialize MOD admin system (requires server instance)
      */
     public static void initModAdminSystem(MinecraftServer server) {
         if (modAdminSystem == null) {
             try {
                 modAdminSystem = new ModAdminSystem(server);
-                AusukaAiMod.LOGGER.info("MOD管理员系统初始化完成");
+                AusukaAiMod.LOGGER.info("MOD admin system initialized");
             } catch (Exception e) {
-                AusukaAiMod.LOGGER.error("MOD管理员系统初始化失败", e);
+                AusukaAiMod.LOGGER.error("Failed to initialize MOD admin system", e);
             }
         }
     }
     
     /**
-     * 关闭AI运行时
+     * Shutdown AI runtime
      */
     public static void shutdown() {
         if (AI_EXECUTOR != null) {
@@ -225,7 +229,7 @@ public final class AiRuntime {
     }
 
     /**
-     * 是否可用（是否已初始化AI Client）
+     * Ready status (whether AI Client is initialized)
      */
     public static boolean isReady() {
         return AIClient != null;

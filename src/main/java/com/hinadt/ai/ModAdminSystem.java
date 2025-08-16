@@ -8,20 +8,20 @@ import net.minecraft.server.network.ServerPlayerEntity;
 
 
 /**
- * MOD管理员权限系统
- * 基于数据库的权限管理，支持层级权限控制
+ * MOD admin permission system.
+ * Provides layered permission control with DB-backed roles and server OP.
  */
 public class ModAdminSystem {
 
     private final MinecraftServer server;
     
     /**
-     * 权限级别定义
+     * Permission levels. Higher level implies all lower privileges.
      */
     public enum PermissionLevel {
-        USER(0, "普通用户"),
-        MOD_ADMIN(2, "Ausuak.Ai MOD管理员"),
-        SERVER_ADMIN(4, "服务器管理员");
+        USER(0, "User"),
+        MOD_ADMIN(2, "Ausuka AI Mod Admin"),
+        SERVER_ADMIN(4, "Server Admin");
         
         private final int level;
         private final String displayName;
@@ -51,71 +51,61 @@ public class ModAdminSystem {
     }
     
     /**
-     * 获取玩家的权限级别
-     * 优先级：数据库MOD管理员 > 服务器OP > 普通用户
+     * Resolve the effective permission level for a player name.
+     * Strategy: compute both DB role and server OP, then return the highest level.
      */
     public PermissionLevel getPlayerPermission(String playerName) {
-        // 检查服务器OP权限
-        ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerName);
-        if (isServerAdmin(player)) {
-            return PermissionLevel.SERVER_ADMIN;
-        }
-        
-        // 检查数据库中的MOD管理员权限
+        PermissionLevel dbLevel = PermissionLevel.USER;
         try (var session = MyBatisSupport.getFactory().openSession()) {
             ModAdminMapper mapper = session.getMapper(ModAdminMapper.class);
             Integer level = mapper.getPermissionLevel(playerName);
-            if (level != null) return PermissionLevel.fromLevel(level);
+            if (level != null) {
+                dbLevel = PermissionLevel.fromLevel(level);
+            }
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("检查MOD管理员权限失败", e);
+            AusukaAiMod.LOGGER.error("Failed to query MOD admin permission from DB for '{}'.", playerName, e);
         }
-        
-        return PermissionLevel.USER;
+
+        ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerName);
+        PermissionLevel opLevel = isServerAdmin(player) ? PermissionLevel.SERVER_ADMIN : PermissionLevel.USER;
+
+        return dbLevel.getLevel() >= opLevel.getLevel() ? dbLevel : opLevel;
     }
     
     /**
-     * 检查玩家是否为服务器管理员（OP）
+     * Check whether a player is a server admin (OP) or singleplayer host.
      */
     private boolean isServerAdmin(ServerPlayerEntity player) {
         if (player == null) return false;
-        
-        // 方法1：检查是否是操作员
         boolean isOp = server.getPlayerManager().isOperator(player.getGameProfile());
-        
-        // 方法2：单人游戏模式下，玩家默认拥有管理员权限
         boolean isSinglePlayer = !server.isDedicated();
-        
         return isOp || isSinglePlayer;
     }
     
     /**
-     * 检查权限并返回结果消息
+     * Check permission and return a machine-friendly message.
+     * Returns "PERMISSION_GRANTED" when authorized, otherwise a concise reason in English.
      */
     public String checkPermissionWithMessage(String playerName, PermissionLevel requiredLevel, String operation) {
         PermissionLevel playerLevel = getPlayerPermission(playerName);
-        
         if (playerLevel.hasPermission(requiredLevel)) {
-            return "PERMISSION_GRANTED"; // 特殊返回值，表示权限验证通过
+            return "PERMISSION_GRANTED";
         } else {
             return generatePermissionDeniedMessage(playerName, operation, playerLevel, requiredLevel);
         }
     }
     
     /**
-     * 生成权限不足的友好提示消息
+     * Produce a deterministic, English denial message for AI consumption.
      */
-    private String generatePermissionDeniedMessage(String playerName, String operation, 
-                                                 PermissionLevel currentLevel, PermissionLevel requiredLevel) {
-        String[] friendlyMessages = {
-            "抱歉 " + playerName + "，" + operation + " 需要 " + requiredLevel.getDisplayName() + " 权限哦~ 🔒",
-            playerName + " 你想" + operation + "？这个功能需要 " + requiredLevel.getDisplayName() + " 权限呢 😅",
-            "哎呀 " + playerName + "，" + operation + " 是 " + requiredLevel.getDisplayName() + " 专用功能，你现在的权限是 " + currentLevel.getDisplayName() + " 🚫",
-            playerName + "，虽然我很想帮你" + operation + "，但这需要 " + requiredLevel.getDisplayName() + " 权限才行~ 💭",
-            "不好意思 " + playerName + "，" + operation + " 这种重要操作只能由 " + requiredLevel.getDisplayName() + " 执行呢 🛡️"
-        };
-        
-        // 随机选择一条友好的拒绝消息
-        int index = (int) (Math.random() * friendlyMessages.length);
-        return friendlyMessages[index];
+    private String generatePermissionDeniedMessage(String playerName, String operation,
+                                                   PermissionLevel currentLevel, PermissionLevel requiredLevel) {
+        return String.format(
+                "PERMISSION_DENIED: Operation '%s' requires '%s'; current='%s'; player='%s'",
+                operation,
+                requiredLevel.getDisplayName(),
+                currentLevel.getDisplayName(),
+                playerName
+        );
     }
 }
