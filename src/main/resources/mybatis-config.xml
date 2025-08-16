@@ -19,7 +19,7 @@
         <mapper class="com.hinadt.persistence.mapper.ConversationMapper"/>
         <mapper class="com.hinadt.persistence.mapper.LocationMapper"/>
         <mapper class="com.hinadt.persistence.mapper.ModAdminMapper"/>
-        <mapper class="com.hinadt.persistence.mapper.ChatSessionMapper"/>
+        <mapper class="com.hinadt.persistence.mapper.PlayerProfileMapper"/>
+        <mapper class="com.hinadt.persistence.mapper.PlayerConnectionMapper"/>
     </mappers>
 </configuration>
-

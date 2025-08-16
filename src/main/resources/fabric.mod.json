@@ -1,37 +1,23 @@
 {
-	"schemaVersion": 1,
-    "id": "ausuka-ai-mod",
-	"version": "${version}",
-    "name": "Ausuka.ai (Fabric Mod)",
-	"description": "Ausuka.ai — AI-powered Minecraft Fabric mod for intelligent chat, item giving, teleportation, and building assistance. 提供智能聊天、物品、传送与建筑辅助的AI模组。",
-	"authors": [
-		"Misaki030112"
-	],
-	"contact": {
-		"homepage": "https://github.com/Misaki030112/mc-ai-mod",
-		"sources": "https://github.com/Misaki030112/mc-ai-mod"
-	},
-	"license": "MIT",
-    "icon": "assets/ausuka-ai-mod/icon.png",
-	"environment": "*",
-	"entrypoints": {
-        "main": [
-            "com.hinadt.AusukaAiMod"
-        ],
-        "client": [
-            "com.hinadt.AusukaAiModClient"
-        ]
-	},
-    "mixins": [
-        "ausuka-ai-mod.mixins.json"
-    ],
-	"depends": {
-		"fabricloader": ">=0.17.2",
-		"minecraft": "~1.21.8",
-		"java": ">=21",
-		"fabric-api": "*"
-	},
-	"suggests": {
-		"another-mod": "*"
-	}
+  "schemaVersion": 1,
+  "id": "ausuka-ai-mod",
+  "version": "${version}",
+  "name": "Ausuka AI Mod",
+  "description": "AI assistant and tools for Minecraft server with per-player i18n.",
+  "authors": ["Hinadt"],
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.hinadt.AusukaAiMod"
+    ]
+  },
+  "mixins": [
+    "ausuka.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.17.0",
+    "minecraft": "1.21.8",
+    "java": ">=21"
+  }
 }
+

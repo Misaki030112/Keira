@@ -108,12 +108,11 @@ public class IntelligentAutoMessageSystem {
                 AusukaAiMod.LOGGER.info("AI广播请求完成: 耗时={}ms", cost);
             }
             
-            server.execute(() -> {
-                server.getPlayerManager().broadcast(
-                    Text.of("§d[Ausuka.ai 💭] §f" + message), 
-                    false
-                );
-            });
+                server.execute(() -> {
+                    server.getPlayerManager().getPlayerList().forEach(p ->
+                        Messages.to(p, Text.translatable("ausuka.auto.broadcast", message))
+                    );
+                });
             
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("生成AI广播消息时出错", e);
@@ -181,9 +180,7 @@ public class IntelligentAutoMessageSystem {
                     AusukaAiMod.LOGGER.info("AI个性化请求完成: 玩家={}, 耗时={}ms", playerName, cost);
                 }
                 
-                server.execute(() -> {
-                    Messages.to(player, Text.of("§e[Ausuka.ai 💡] §f" + message));
-                });
+                server.execute(() -> Messages.to(player, Text.translatable("ausuka.auto.personal", message)));
                 
             } catch (Exception e) {
                 AusukaAiMod.LOGGER.error("生成个性化消息时出错: " + playerName, e);
@@ -286,17 +283,13 @@ public class IntelligentAutoMessageSystem {
     
     // 命令工具：管理员控制系统
     // 管理员控制方法：启用或禁用全服自动消息系统
-    public static String toggleAutoMessages(boolean enabled) {
+    public static void toggleAutoMessages(boolean enabled) {
         systemEnabled = enabled;
-        String status = enabled ? "启用" : "禁用";
-        return "✅ 自动消息系统已" + status;
     }
     
     // 管理员控制方法：为特定玩家启用或禁用个性化自动消息
-    public static String togglePlayerAutoMessages(String playerName, boolean enabled) {
+    public static void togglePlayerAutoMessages(String playerName, boolean enabled) {
         playerOptOut.put(playerName, !enabled);
-        String status = enabled ? "启用" : "禁用";
-        return String.format("✅ 已为玩家 %s %s个性化自动消息", playerName, status);
     }
     
     /**

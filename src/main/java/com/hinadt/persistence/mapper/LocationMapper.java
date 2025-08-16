@@ -1,6 +1,6 @@
 package com.hinadt.persistence.mapper;
 
-import com.hinadt.persistence.model.LocationRow;
+import com.hinadt.persistence.record.LocationRecord;
 import org.apache.ibatis.annotations.*;
 
 import java.util.List;
@@ -17,26 +17,42 @@ public interface LocationMapper {
                 @Param("description") String description);
 
     @Select("SELECT location_name, world, x, y, z, description, saved_at FROM player_locations WHERE player_name = #{playerName} AND location_name = #{locationName}")
-    @Results(id = "LocationRowMapping", value = {
-            @Result(property = "locationName", column = "location_name"),
-            @Result(property = "world", column = "world"),
-            @Result(property = "x", column = "x"),
-            @Result(property = "y", column = "y"),
-            @Result(property = "z", column = "z"),
-            @Result(property = "description", column = "description"),
-            @Result(property = "savedAt", column = "saved_at")
+    @ConstructorArgs({
+            @Arg(column = "location_name", javaType = String.class, name = "locationName"),
+            @Arg(column = "world", javaType = String.class, name = "world"),
+            @Arg(column = "x", javaType = double.class, name = "x"),
+            @Arg(column = "y", javaType = double.class, name = "y"),
+            @Arg(column = "z", javaType = double.class, name = "z"),
+            @Arg(column = "description", javaType = String.class, name = "description"),
+            @Arg(column = "saved_at", javaType = java.time.LocalDateTime.class, name = "savedAt")
     })
-    LocationRow getExact(@Param("playerName") String playerName,
+    LocationRecord getExact(@Param("playerName") String playerName,
                          @Param("locationName") String locationName);
 
     @Select("SELECT location_name, world, x, y, z, description, saved_at FROM player_locations WHERE player_name = #{playerName} AND location_name LIKE #{pattern} ORDER BY saved_at DESC LIMIT 1")
-    @ResultMap("LocationRowMapping")
-    LocationRow getFuzzy(@Param("playerName") String playerName,
+    @ConstructorArgs({
+            @Arg(column = "location_name", javaType = String.class, name = "locationName"),
+            @Arg(column = "world", javaType = String.class, name = "world"),
+            @Arg(column = "x", javaType = double.class, name = "x"),
+            @Arg(column = "y", javaType = double.class, name = "y"),
+            @Arg(column = "z", javaType = double.class, name = "z"),
+            @Arg(column = "description", javaType = String.class, name = "description"),
+            @Arg(column = "saved_at", javaType = java.time.LocalDateTime.class, name = "savedAt")
+    })
+    LocationRecord getFuzzy(@Param("playerName") String playerName,
                          @Param("pattern") String pattern);
 
     @Select("SELECT location_name, world, x, y, z, description, saved_at FROM player_locations WHERE player_name = #{playerName} ORDER BY saved_at DESC")
-    @ResultMap("LocationRowMapping")
-    List<LocationRow> getAll(@Param("playerName") String playerName);
+    @ConstructorArgs({
+            @Arg(column = "location_name", javaType = String.class, name = "locationName"),
+            @Arg(column = "world", javaType = String.class, name = "world"),
+            @Arg(column = "x", javaType = double.class, name = "x"),
+            @Arg(column = "y", javaType = double.class, name = "y"),
+            @Arg(column = "z", javaType = double.class, name = "z"),
+            @Arg(column = "description", javaType = String.class, name = "description"),
+            @Arg(column = "saved_at", javaType = java.time.LocalDateTime.class, name = "savedAt")
+    })
+    List<LocationRecord> getAll(@Param("playerName") String playerName);
 
     @Delete("DELETE FROM player_locations WHERE player_name = #{playerName} AND location_name = #{locationName}")
     int delete(@Param("playerName") String playerName,

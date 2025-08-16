@@ -19,7 +19,7 @@ public final class AiServices {
             workflowManager = new AiWorkflowManager(server);
         }
         if (sessionStore == null) {
-            sessionStore = new DatabaseAiChatSessionStore();
+            sessionStore = new InMemoryAiChatSessionStore();
         }
     }
 

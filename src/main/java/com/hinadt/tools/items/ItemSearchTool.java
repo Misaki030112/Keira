@@ -266,7 +266,7 @@ public class ItemSearchTool {
 
                 // plain token
                 hasPlain = true;
-                if (onlyPlain == null && !t.isEmpty()) onlyPlain = t;
+                if (onlyPlain == null) onlyPlain = t;
                 else onlyPlain = ""; // more than one -> not "single"
             }
             return new QueryOps(mode, ns, tags, hasPlain, (onlyPlain == null) ? "" : onlyPlain);

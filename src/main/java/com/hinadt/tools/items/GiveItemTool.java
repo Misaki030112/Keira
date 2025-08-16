@@ -11,6 +11,7 @@ package com.hinadt.tools.items;
 
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -25,6 +26,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 
 public class GiveItemTool {
+
+    private final MinecraftServer server;
+
+    public GiveItemTool(MinecraftServer server) {
+        this.server = server;
+    }
 
     // ----------------------------- AI-facing result DTO -----------------------------
     public record GiveItemResult(
@@ -92,7 +99,7 @@ public class GiveItemTool {
                     "Item id must be 'namespace:path'.", null, null, item, requested, 0, 0, 0);
         }
         final Item mcItem = Registries.ITEM.get(id);
-        if (mcItem == net.minecraft.item.Items.AIR) {
+        if (mcItem == Items.AIR) {
             return new GiveItemResult(false, "ERR_ITEM_NOT_FOUND",
                     "Item not found in registry.", null, null, item, requested, 0, 0, 0);
         }
@@ -139,10 +146,6 @@ public class GiveItemTool {
                 remaining -= take;
             }
 
-            // Notify player (server is en_us as per your setup)
-            player.sendMessage(Text.of("[AI] Item processed: " + item + " x" + requested +
-                    " (given=" + given + ", dropped=" + dropped + ")"));
-
             ref.set(new GiveItemResult(true, "OK", "Item delivery finished.",
                     player.getGameProfile().getName(),
                     player.getUuid().toString(),
@@ -159,8 +162,6 @@ public class GiveItemTool {
 
     /** Find an online player by name first, then by UUID string. */
     private ServerPlayerEntity findOnlinePlayer(String nameOrUuid) {
-        MinecraftServer server = net.fabricmc.loader.api.FabricLoader.getInstance()
-                .getGameInstance() instanceof MinecraftServer s ? s : null;
         if (server == null) return null;
 
         // by name
@@ -178,8 +179,6 @@ public class GiveItemTool {
 
     /** Ensure the runnable runs on the server main thread; block until completion. */
     private void runOnMainAndWait(Runnable task) {
-        MinecraftServer server = net.fabricmc.loader.api.FabricLoader.getInstance()
-                .getGameInstance() instanceof MinecraftServer s ? s : null;
         if (server == null) { task.run(); return; }
 
         if (server.isOnThread()) { // already on main thread

@@ -57,20 +57,20 @@ public final class ChatCommands {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
         if (!AiRuntime.isReady()) {
-            Messages.to(player, Text.of("§e[Ausuka.ai] AI未配置或不可用，请先配置 API 密钥。"));
+            Messages.to(player, Text.translatable("aim.not_ready"));
             return 0;
         }
         if (!Permissions.has(player, ModAdminSystem.PermissionLevel.USER)) {
-            Messages.to(player, Text.of("§c[Ausuka.ai] 权限不足"));
+            Messages.to(player, Text.translatable("aim.no_permission"));
             return 0;
         }
         String name = player.getName().getString();
         if (isAiAssistantName(name)) {
-            Messages.to(player, Text.of("§c[系统] 检测到AI助手身份，禁止进入AI聊天模式"));
+            Messages.to(player, Text.translatable("aim.name.forbidden"));
             return 0;
         }
         if (AiServices.sessions().isInChat(name)) {
-            Messages.to(player, Text.of("§c[Ausuka.ai] 你已经在AI聊天模式中了！使用 /ai exit 退出"));
+            Messages.to(player, Text.translatable("aim.already_in_chat"));
             return 0;
         }
         AiServices.sessions().enter(name);
@@ -116,11 +116,11 @@ public final class ChatCommands {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
         if (!AiRuntime.isReady()) {
-            Messages.to(player, Text.of("§e[Ausuka.ai] AI未配置或不可用，请先配置 API 密钥。"));
+            Messages.to(player, Text.translatable("aim.not_ready"));
             return 0;
         }
         if (!Permissions.has(player, ModAdminSystem.PermissionLevel.USER)) {
-            Messages.to(player, Text.of("§c[Ausuka.ai] 权限不足"));
+            Messages.to(player, Text.translatable("aim.no_permission"));
             return 0;
         }
         String msg = StringArgumentType.getString(ctx, "message");
@@ -136,12 +136,12 @@ public final class ChatCommands {
                     return;
                 }
                 String out = (response == null || response.isEmpty())
-                        ? "我没能给出回答，请换种说法再试试~"
+                        ? Text.translatable("aim.say.no_response").getString()
                         : response;
                 String preview = out.substring(0, Math.min(180, out.length())).replaceAll("\n", " ");
                 AusukaAiMod.LOGGER.debug("[mid={}] [/ai say] 发送AI回复给玩家 player={}, len={}, preview='{}'",
                         messageId, player.getName().getString(), out.length(), preview);
-                AiServices.server().execute(() -> Messages.to(player, Text.of("§b[Ausuka.ai] §f" + out)));
+                AiServices.server().execute(() -> Messages.to(player, Text.translatable("ausuka.ai.reply", out)));
             });
         return 1;
     }

@@ -20,7 +20,7 @@ public class ModAdminSystem {
      */
     public enum PermissionLevel {
         USER(0, "普通用户"),
-        MOD_ADMIN(2, "MOD管理员"),
+        MOD_ADMIN(2, "Ausuak.Ai MOD管理员"),
         SERVER_ADMIN(4, "服务器管理员");
         
         private final int level;

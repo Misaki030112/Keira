@@ -1,12 +1,15 @@
 {
   "required": true,
+  "minVersion": "0.8",
   "package": "com.hinadt.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "ExampleMixin",
     "PlayerJoinMixin",
-    "PlayerLeaveMixin"
+    "PlayerLeaveMixin",
+    "ServerPlayerEntityMixin"
   ],
-  "injectors": { "defaultRequire": 1 },
-  "overwrites": { "requireAnnotations": true }
+  "injectors": {
+    "defaultRequire": 1
+  }
 }
+

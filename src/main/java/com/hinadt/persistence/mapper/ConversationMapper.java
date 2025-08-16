@@ -1,6 +1,6 @@
 package com.hinadt.persistence.mapper;
 
-import com.hinadt.persistence.model.ConversationRow;
+import com.hinadt.persistence.record.ConversationRecord;
 import org.apache.ibatis.annotations.*;
 
 import java.util.List;
@@ -16,14 +16,14 @@ public interface ConversationMapper {
                        @Param("contextData") String contextData);
 
     @Select("SELECT session_id, message_type, message_content, `timestamp`, context_data FROM conversations WHERE player_name = #{playerName} AND session_id = #{sessionId} ORDER BY `timestamp` DESC LIMIT #{limit}")
-    @Results(id = "ConversationRowMapping", value = {
-            @Result(property = "sessionId", column = "session_id"),
-            @Result(property = "messageType", column = "message_type"),
-            @Result(property = "messageContent", column = "message_content"),
-            @Result(property = "timestamp", column = "timestamp"),
-            @Result(property = "contextData", column = "context_data")
+    @ConstructorArgs({
+            @Arg(column = "session_id", javaType = String.class, name = "sessionId"),
+            @Arg(column = "message_type", javaType = String.class, name = "messageType"),
+            @Arg(column = "message_content", javaType = String.class, name = "messageContent"),
+            @Arg(column = "timestamp", javaType = java.time.LocalDateTime.class, name = "timestamp"),
+            @Arg(column = "context_data", javaType = String.class, name = "contextData")
     })
-    List<ConversationRow> getRecent(@Param("playerName") String playerName,
+    List<ConversationRecord> getRecent(@Param("playerName") String playerName,
                                     @Param("sessionId") String sessionId,
                                     @Param("limit") int limit);
 

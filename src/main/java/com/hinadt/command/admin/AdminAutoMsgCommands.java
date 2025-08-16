@@ -13,7 +13,6 @@ import net.minecraft.text.Text;
 import com.hinadt.util.Messages;
 import com.hinadt.persistence.MyBatisSupport;
 import com.hinadt.persistence.mapper.ConversationMapper;
-import com.hinadt.persistence.mapper.ChatSessionMapper;
 import com.hinadt.AusukaAiMod;
 
 public final class AdminAutoMsgCommands {
@@ -42,7 +41,7 @@ public final class AdminAutoMsgCommands {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
         if (!Permissions.has(player, ModAdminSystem.PermissionLevel.MOD_ADMIN)) {
-            Messages.to(player, Text.of("§c[Ausuka.ai] 只有管理员才能访问管理功能"));
+            Messages.to(player, Text.translatable("aim.no_permission"));
             return 0;
         }
         Messages.to(player, Text.translatable("aim.admin.title"));
@@ -56,7 +55,7 @@ public final class AdminAutoMsgCommands {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
         if (!Permissions.has(player, ModAdminSystem.PermissionLevel.MOD_ADMIN)) {
-            Messages.to(player, Text.of("§c[Ausuka.ai] 只有管理员才能控制自动消息系统"));
+            Messages.to(player, Text.translatable("aim.no_permission"));
             return 0;
         }
         Messages.to(player, Text.translatable("aim.admin.auto.title"));
@@ -70,12 +69,12 @@ public final class AdminAutoMsgCommands {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
         if (!Permissions.has(player, ModAdminSystem.PermissionLevel.MOD_ADMIN)) {
-            Messages.to(player, Text.of("§c[Ausuka.ai] 只有管理员才能控制自动消息系统"));
+            Messages.to(player, Text.translatable("aim.no_permission"));
             return 0;
         }
         boolean newState = !IntelligentAutoMessageSystem.isSystemEnabled();
-        String result = IntelligentAutoMessageSystem.toggleAutoMessages(newState);
-        Messages.to(player, Text.translatable("aim.prefix_text", result));
+        IntelligentAutoMessageSystem.toggleAutoMessages(newState);
+        Messages.to(player, Text.translatable(newState ? "aim.auto.enabled" : "aim.auto.disabled"));
         return 1;
     }
 
@@ -83,7 +82,7 @@ public final class AdminAutoMsgCommands {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
         if (!Permissions.has(player, ModAdminSystem.PermissionLevel.MOD_ADMIN)) {
-            Messages.to(player, Text.of("§c[Ausuka.ai] 只有管理员才能查看自动消息系统状态"));
+            Messages.to(player, Text.translatable("aim.no_permission"));
             return 0;
         }
         boolean enabled = IntelligentAutoMessageSystem.isSystemEnabled();
@@ -97,12 +96,12 @@ public final class AdminAutoMsgCommands {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
         if (!Permissions.has(player, ModAdminSystem.PermissionLevel.MOD_ADMIN)) {
-            Messages.to(player, Text.of("§c[Ausuka.ai] 只有管理员才能控制自动消息系统"));
+            Messages.to(player, Text.translatable("aim.no_permission"));
             return 0;
         }
         String target = StringArgumentType.getString(ctx, "player");
-        String result = IntelligentAutoMessageSystem.togglePlayerAutoMessages(target, enable);
-        Messages.to(player, Text.translatable("aim.prefix_text", result));
+        IntelligentAutoMessageSystem.togglePlayerAutoMessages(target, enable);
+        Messages.to(player, Text.translatable(enable ? "aim.auto.personal.enabled" : "aim.auto.personal.disabled", target));
         return 1;
     }
 
@@ -119,7 +118,7 @@ public final class AdminAutoMsgCommands {
             int totalMessages = ((Number) conv.getOrDefault("total_messages", 0)).intValue();
             int uniquePlayers = ((Number) conv.getOrDefault("unique_players", 0)).intValue();
             int totalSessions = ((Number) conv.getOrDefault("total_sessions", 0)).intValue();
-            int inChat = session.getMapper(ChatSessionMapper.class).countInChat();
+            int inChat = AiServices.sessions().count();
 
             Messages.to(player, Text.translatable("aim.stats.title"));
             Messages.to(player, Text.translatable("aim.stats.messages", totalMessages));

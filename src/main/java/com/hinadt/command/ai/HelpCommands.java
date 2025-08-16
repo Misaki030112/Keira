@@ -27,45 +27,38 @@ public final class HelpCommands {
     public static void sendHelp(ServerPlayerEntity player) {
         ModAdminSystem.PermissionLevel perm = Permissions.getPlayerPermission(player);
 
-        // 主命令帮助
-        sendMultiline(player, String.join("\n",
-            "§b=== Ausuka.ai 助手命令帮助 ===§r",
-            "§a/ai help§r - 查看命令帮助",
-            "§a/ai status§r - 查看AI聊天状态",
-            "§a/ai chat§r - 进入AI对话模式",
-            "§a/ai say <消息>§r - 单次向AI提问",
-            "§a/ai exit§r - 退出AI对话模式",
-            "§a/ai new§r - 开始新的对话会话",
-            "§7使用 /ai <子命令> 获取详细帮助§r"
-        ));
+        // 主命令帮助（国际化）
+        Messages.to(player, Text.translatable("aim.help.header"));
+        Messages.to(player, Text.translatable("aim.help.cmd.help"));
+        Messages.to(player, Text.translatable("aim.help.cmd.status"));
+        Messages.to(player, Text.translatable("aim.help.cmd.chat"));
+        Messages.to(player, Text.translatable("aim.help.cmd.say"));
+        Messages.to(player, Text.translatable("aim.help.cmd.exit"));
+        Messages.to(player, Text.translatable("aim.help.cmd.new"));
+        Messages.to(player, Text.translatable("aim.help.footer"));
 
-        Messages.to(player, Text.of(""));
-        Messages.to(player, Text.of("§b=== AI聊天模式功能 ==="));
-        Messages.to(player, Text.of("§a🎒 智能物品管理 §7- \"我想要钻石剑\" / \"帮我整理背包\""));
-        Messages.to(player, Text.of("§a🚀 智能传送系统 §7- \"带我回家\" / \"记住这里是我的农场\""));
-        Messages.to(player, Text.of("§a🧠 AI记忆系统 §7- \"记住我喜欢现代建筑风格\""));
-        Messages.to(player, Text.of("§a🏗️ 建筑助手 §7- \"帮我设计一个城堡\""));
-        Messages.to(player, Text.of("§a🌤️ 环境控制 §7- \"我想要晴天\" / \"设置为白天\""));
-        Messages.to(player, Text.of("§a❤️ 玩家服务 §7- \"治疗我\" / \"查看玩家信息\""));
-        Messages.to(player, Text.of("§a🔍 环境分析 §7- \"分析周围环境\" / \"寻找钻石\""));
-        Messages.to(player, Text.of("§a💬 对话记忆 §7- AI会记住整个对话过程和上下文"));
+        Messages.to(player, Text.translatable("aim.help.features.header"));
+        Messages.to(player, Text.translatable("aim.help.feature.items"));
+        Messages.to(player, Text.translatable("aim.help.feature.tp"));
+        Messages.to(player, Text.translatable("aim.help.feature.memory"));
+        Messages.to(player, Text.translatable("aim.help.feature.build"));
+        Messages.to(player, Text.translatable("aim.help.feature.env"));
+        Messages.to(player, Text.translatable("aim.help.feature.player"));
+        Messages.to(player, Text.translatable("aim.help.feature.analysis"));
+        Messages.to(player, Text.translatable("aim.help.feature.dialog"));
 
         if (perm.hasPermission(ModAdminSystem.PermissionLevel.MOD_ADMIN)) {
-            Messages.to(player, Text.of(""));
-            sendMultiline(player, String.join("\n",
-                "§c=== 管理员专用命令 ===§r",
-                "§c/ai admin auto-msg toggle§r - 切换自动消息系统开关",
-                "§c/ai admin auto-msg status§r - 查看自动消息系统状态",
-                "§c/ai admin auto-msg personal <玩家> <on|off>§r - 为玩家开/关个性化消息"
-            ));
+            Messages.to(player, Text.translatable("aim.help.admin.header"));
+            Messages.to(player, Text.translatable("aim.help.admin.auto.toggle"));
+            Messages.to(player, Text.translatable("aim.help.admin.auto.status"));
+            Messages.to(player, Text.translatable("aim.help.admin.auto.personal"));
         }
 
-        Messages.to(player, Text.of(""));
-        Messages.to(player, Text.of("§e💡 提示：在AI聊天模式中，直接说出你的需求，AI会自动理解并提供帮助！"));
-        Messages.to(player, Text.of("§e🔄 使用 /ai new 开始新对话可以清除之前的对话记忆"));
+        Messages.to(player, Text.translatable("aim.help.tips.line1"));
+        Messages.to(player, Text.translatable("aim.help.tips.line2"));
     }
 
     private static void sendMultiline(ServerPlayerEntity player, String text) {
-        for (String line : text.split("\n")) Messages.to(player, Text.of(line));
+        for (String line : text.split("\n")) Messages.to(player, Text.translatable(line));
     }
 }

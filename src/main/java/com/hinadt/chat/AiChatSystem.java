@@ -5,6 +5,7 @@ import com.hinadt.command.core.AiServices;
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.util.Messages;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
+import net.minecraft.text.MutableText;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import java.util.UUID;
@@ -51,14 +52,15 @@ public class AiChatSystem {
             .whenComplete((response, ex) -> {
                 if (ex != null) {
                     AusukaAiMod.LOGGER.warn("[mid={}] [chat] 处理消息失败/超时: player={}, err={}", messageId, playerName, ex.toString());
-                    AiServices.server().execute(() ->
-                            Messages.to(player, Text.of("§c[Ausuka.ai] 响应超时或出错了，请稍后再试。"))
-                    );
+                    AiServices.server().execute(() -> {
+                        MutableText t = Text.translatable("ausuka.ai.timeout");
+                        Messages.to(player, Text.of("§c").copy().append(t));
+                    });
                     return;
                 }
 
                 String out = (response == null || response.isEmpty())
-                        ? "超时，我没能给出回答，请换种说法再试试~"
+                        ? Text.translatable("ausuka.ai.no_response").getString()
                         : response;
 
                 String preview = out.substring(0, Math.min(180, out.length())).replaceAll("\n", " ");
@@ -66,7 +68,7 @@ public class AiChatSystem {
                         messageId, playerName, out.length(), preview);
 
                 AiServices.server().execute(() ->
-                        Messages.to(player, Text.of("§b[Ausuka.ai] §f" + out))
+                        Messages.to(player, Text.translatable("ausuka.ai.reply", out))
                 );
             });
     }

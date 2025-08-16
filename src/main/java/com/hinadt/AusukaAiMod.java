@@ -7,7 +7,6 @@ import com.hinadt.command.AiCommandRegistry;
 import com.hinadt.command.core.AiServices;
 import com.hinadt.chat.IntelligentAutoMessageSystem;
 import net.fabricmc.api.ModInitializer;
-import com.hinadt.command.core.DatabaseAiChatSessionStore;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
 import org.slf4j.Logger;
@@ -52,9 +51,7 @@ public class AusukaAiMod implements ModInitializer {
                 AiChatSystem.initialize();
                 LOGGER.info("✅ AI聊天系统与命令注册完成");
 
-                // 清理过期的会话状态（7天）
-                int cleaned = DatabaseAiChatSessionStore.cleanupOldEntriesHours(24 * 7);
-                LOGGER.info("🧹 已清理过期聊天会话记录: {} 条", cleaned);
+                // 会话状态仅在内存中维护，无需数据库清理
 				
 				// 初始化智能自动消息系统
 				IntelligentAutoMessageSystem.initialize(server);
@@ -66,7 +63,7 @@ public class AusukaAiMod implements ModInitializer {
                 server.execute(() ->
                     Messages.broadcast(
                         server,
-                        Text.of("§b🤖 [Ausuka.ai] §a系统上线！输入 §f/ai help §a查看功能")
+                        Text.translatable("ausuka.server.online")
                     )
                 );
 				

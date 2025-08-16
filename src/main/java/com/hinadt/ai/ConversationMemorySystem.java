@@ -4,8 +4,8 @@ import com.hinadt.AusukaAiMod;
 import com.hinadt.persistence.MyBatisSupport;
 import com.hinadt.persistence.mapper.ConversationMapper;
 import com.hinadt.persistence.mapper.LocationMapper;
-import com.hinadt.persistence.model.ConversationRow;
-import net.minecraft.util.math.Vec3d;
+import com.hinadt.persistence.record.ConversationRecord;
+import com.hinadt.persistence.record.LocationRecord;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -56,16 +56,13 @@ public class ConversationMemorySystem {
         
         StringBuilder context = new StringBuilder();
         context.append("## Conversation History Context ##\n");
-        for (ConversationRecord record : history) {
-            String role = switch (record.messageType) {
-                case USER -> "User";
-                case AI -> "AI";
-                case SYSTEM -> "System";
-            };
+        for (ConversationRecord r : history) {
+            String type = r.messageType() == null ? "SYSTEM" : r.messageType().toUpperCase();
+            String role = switch (type) { case "USER" -> "User"; case "AI" -> "AI"; default -> "System"; };
             context.append(String.format("[%s] %s: %s\n",
-                    record.timestamp.toString().substring(11, 19), // show time part only
+                    r.timestamp().toString().substring(11, 19),
                     role,
-                    record.content));
+                    r.messageContent()));
         }
         context.append("## Current Conversation ##\n");
         
@@ -92,7 +89,7 @@ public class ConversationMemorySystem {
     public void saveMessage(String playerName, MessageType type, String content) {
         String sessionId = getCurrentSessionId(playerName);
         persistMessage(playerName, sessionId, type, content, "{}");
-        updateCache(playerName, new ConversationRecord(sessionId, type, content, LocalDateTime.now(), "{}"));
+        updateCache(playerName, new ConversationRecord(sessionId, type.name(), content, LocalDateTime.now(), "{}"));
     }
     
     /**
@@ -137,17 +134,8 @@ public class ConversationMemorySystem {
         List<ConversationRecord> records = new ArrayList<>();
         try (var session = MyBatisSupport.getFactory().openSession()) {
             ConversationMapper mapper = session.getMapper(ConversationMapper.class);
-            List<ConversationRow> rows = mapper.getRecent(playerName, sessionId, limit);
-            for (ConversationRow r : rows) {
-                MessageType type = MessageType.from(r.getMessageType());
-                records.add(new ConversationRecord(
-                        r.getSessionId(),
-                        type,
-                        r.getMessageContent(),
-                        r.getTimestamp(),
-                        r.getContextData()
-                ));
-            }
+            List<ConversationRecord> rows = mapper.getRecent(playerName, sessionId, limit);
+            records.addAll(rows);
             Collections.reverse(records);
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("Failed to load conversation records", e);
@@ -177,7 +165,7 @@ public class ConversationMemorySystem {
         // Keep cache size bounded
         List<ConversationRecord> cache = conversationCache.get(playerName);
         if (cache.size() > 50) {
-            cache.removeFirst();
+            cache.remove(0);
         }
     }
     
@@ -194,18 +182,7 @@ public class ConversationMemorySystem {
         conversationCache.remove(playerName);
     }
 
-    /** Conversation record .*/
-    public record ConversationRecord(String sessionId, MessageType messageType, String content, LocalDateTime timestamp,
-                                         String contextData) {
-    }
 
-    /** Location data for location memory feature. */
-    public record LocationData(String name, String world, double x, double y, double z, String description) {
-        public Vec3d toVec3d() {
-                return new Vec3d(x, y, z);
-        }
-    }
-    
     // ==================== Location memory ====================
     
     /**
@@ -224,34 +201,23 @@ public class ConversationMemorySystem {
     /**
      * Get a location for teleport by exact or fuzzy name.
      */
-    public LocationData getLocationForTeleport(String playerName, String destination) {
-        // 首先尝试精确匹配
-        LocationData exact = getExactLocation(playerName, destination);
+    public LocationRecord getLocationForTeleport(String playerName, String destination) {
+        LocationRecord exact = getExactLocation(playerName, destination);
         if (exact != null) {
             return exact;
         }
         
-        // 然后尝试模糊匹配
         return getFuzzyLocation(playerName, destination);
     }
     
     /**
      * Exact location match.
      */
-    private LocationData getExactLocation(String playerName, String locationName) {
+    private LocationRecord getExactLocation(String playerName, String locationName) {
         try (var session = MyBatisSupport.getFactory().openSession()) {
             LocationMapper mapper = session.getMapper(LocationMapper.class);
-            com.hinadt.persistence.model.LocationRow row = mapper.getExact(playerName, locationName);
-            if (row != null) {
-                return new LocationData(
-                        row.getLocationName(),
-                        row.getWorld(),
-                        row.getX(),
-                        row.getY(),
-                        row.getZ(),
-                        row.getDescription()
-                );
-            }
+            LocationRecord row = mapper.getExact(playerName, locationName);
+            if (row != null) return row;
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("Failed to load location memory", e);
         }
@@ -262,20 +228,11 @@ public class ConversationMemorySystem {
     /**
      * Fuzzy location match.
      */
-    private LocationData getFuzzyLocation(String playerName, String searchTerm) {
+    private LocationRecord getFuzzyLocation(String playerName, String searchTerm) {
         try (var session = MyBatisSupport.getFactory().openSession()) {
             LocationMapper mapper = session.getMapper(LocationMapper.class);
-            com.hinadt.persistence.model.LocationRow row = mapper.getFuzzy(playerName, "%" + searchTerm + "%");
-            if (row != null) {
-                return new LocationData(
-                        row.getLocationName(),
-                        row.getWorld(),
-                        row.getX(),
-                        row.getY(),
-                        row.getZ(),
-                        row.getDescription()
-                );
-            }
+            LocationRecord row = mapper.getFuzzy(playerName, "%" + searchTerm + "%");
+            if (row != null) return row;
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("Failed to fuzzy search location", e);
         }
@@ -286,27 +243,14 @@ public class ConversationMemorySystem {
     /**
      * List all saved locations for a player.
      */
-    public List<LocationData> getAllLocations(String playerName) {
-        List<LocationData> locations = new ArrayList<>();
-        
+    public List<LocationRecord> getAllLocations(String playerName) {
         try (var session = MyBatisSupport.getFactory().openSession()) {
             LocationMapper mapper = session.getMapper(LocationMapper.class);
-            java.util.List<com.hinadt.persistence.model.LocationRow> rows = mapper.getAll(playerName);
-            for (var r : rows) {
-                locations.add(new LocationData(
-                        r.getLocationName(),
-                        r.getWorld(),
-                        r.getX(),
-                        r.getY(),
-                        r.getZ(),
-                        r.getDescription()
-                ));
-            }
+            return mapper.getAll(playerName);
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("Failed to list all locations", e);
+            return Collections.emptyList();
         }
-        
-        return locations;
     }
     
     /**

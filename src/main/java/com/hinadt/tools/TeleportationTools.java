@@ -2,7 +2,7 @@ package com.hinadt.tools;
 
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
-import com.hinadt.ai.ConversationMemorySystem;
+import com.hinadt.persistence.record.LocationRecord;
 import com.hinadt.observability.RequestContext;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -86,16 +86,17 @@ public class TeleportationTools {
         }
         
         // 1. 最高优先级：检查记忆中的位置
-        ConversationMemorySystem.LocationData savedLocation = AiRuntime.getConversationMemory().getLocationForTeleport(playerName, destination);
+        LocationRecord savedLocation = AiRuntime.getConversationMemory().getLocationForTeleport(playerName, destination);
         if (savedLocation != null) {
             AusukaAiMod.LOGGER.debug("{} [tool:teleport_player] 使用记忆位置 name='{}' world='{}'",
-                    RequestContext.midTag(), savedLocation.name(), savedLocation.world());
+                    RequestContext.midTag(), savedLocation.locationName(), savedLocation.world());
             ServerWorld targetWorld = getTargetWorld(savedLocation.world());
             if (targetWorld == null) {
                 targetWorld = player.getWorld();
             }
-            return teleportToPosition(player, savedLocation.toVec3d(), targetWorld) + 
-                   " (使用记忆位置：" + savedLocation.name() + ")";
+            Vec3d pos = new Vec3d(savedLocation.x(), savedLocation.y(), savedLocation.z());
+            return teleportToPosition(player, pos, targetWorld) + 
+                   " (使用记忆位置：" + savedLocation.locationName() + ")";
         }
         
         // 2. 尝试解析为精确坐标
@@ -254,19 +255,15 @@ public class TeleportationTools {
                         RequestContext.midTag(), getWorldDisplayName(targetWorld), safePos.x, safePos.y, safePos.z);
                 player.teleport(targetWorld, safePos.x, safePos.y, safePos.z, Set.of(), player.getYaw(), player.getPitch(), false);
                 
-                // 发送确认消息
                 String worldName = getWorldDisplayName(targetWorld);
-                String message = String.format("✅ 传送成功！已将 %s 传送到 %s 的坐标 (%.1f, %.1f, %.1f)", 
-                    player.getName().getString(), worldName, safePos.x, safePos.y, safePos.z);
-                
-                player.sendMessage(Text.of("[Ausuka.ai] " + message));
+                String message = String.format("Teleported %s to %s at (%.1f, %.1f, %.1f)",
+                        player.getName().getString(), worldName, safePos.x, safePos.y, safePos.z);
                 result.set(message);
-                AusukaAiMod.LOGGER.debug("{} [tool:teleport_player] 传送成功 world='{}' pos=({},{},{})",
+                AusukaAiMod.LOGGER.debug("{} [tool:teleport_player] success world='{}' pos=({},{},{})",
                         RequestContext.midTag(), worldName, safePos.x, safePos.y, safePos.z);
                 
             } catch (Exception e) {
-                String errorMsg = "传送失败：" + e.getMessage();
-                player.sendMessage(Text.of("[Ausuka.ai] " + errorMsg));
+                String errorMsg = "Teleport failed: " + e.getMessage();
                 result.set(errorMsg);
                 AusukaAiMod.LOGGER.error("传送玩家时出错", e);
             }

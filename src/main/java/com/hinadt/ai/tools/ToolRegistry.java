@@ -19,7 +19,7 @@ public class ToolRegistry {
     public ToolRegistry(MinecraftServer server) {
         // Item tools
         this.itemSearchTool = new ItemSearchTool();
-        this.giveItemTool = new GiveItemTool();
+        this.giveItemTool = new GiveItemTool(server);
         this.teleportTools = new TeleportationTools(server);
         this.weatherTools = new WeatherTools(server);
         this.playerStatsTools = new PlayerStatsTools(server);

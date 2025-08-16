@@ -67,7 +67,7 @@ public class WeatherTools {
         final ServerWorld finalTargetWorld = targetWorld;
         final int weatherDuration = (duration != null && duration > 0) ? duration * 20 : 12000; // 转换为游戏tick
         
-        AtomicReference<String> result = new AtomicReference<>("天气变更失败");
+        AtomicReference<String> result = new AtomicReference<>("Weather change failed");
         
         runOnMainAndWait(() -> {
             try {
@@ -77,37 +77,32 @@ public class WeatherTools {
                     case "clear":
                     case "晴天":
                         finalTargetWorld.setWeather(weatherDuration, 0, false, false);
-                        result.set("☀️ 天气已变更为晴天，持续 " + (weatherDuration/20) + " 秒");
+                        result.set("Clear weather set for " + (weatherDuration/20) + " seconds");
                         break;
                         
                     case "rain":
                     case "雨天":
                         finalTargetWorld.setWeather(0, weatherDuration, true, false);
-                        result.set("🌧️ 天气已变更为雨天，持续 " + (weatherDuration/20) + " 秒");
+                        result.set("Rainy weather set for " + (weatherDuration/20) + " seconds");
                         break;
                         
                     case "thunder":
                     case "雷雨":
                         finalTargetWorld.setWeather(0, weatherDuration, true, true);
-                        result.set("⛈️ 天气已变更为雷雨，持续 " + (weatherDuration/20) + " 秒");
+                        result.set("Thunderstorm set for " + (weatherDuration/20) + " seconds");
                         break;
                         
                     default:
-                        result.set("❌ 未知的天气类型：" + weatherType + "。支持的类型：晴天/clear, 雨天/rain, 雷雨/thunder");
+                        result.set("Unknown weather type: " + weatherType + ". Supported: clear, rain, thunder");
                         return;
                 }
                 
-                // 广播天气变更消息
                 String worldName = getWorldDisplayName(finalTargetWorld);
-                server.getPlayerManager().broadcast(
-                    Text.of("[Ausuka.ai] " + result.get() + " (世界: " + worldName + ")"), 
-                    false
-                );
                 AusukaAiMod.LOGGER.debug("{} [tool:change_weather] result='{}' world='{}'",
                         RequestContext.midTag(), result.get(), worldName);
                 
             } catch (Exception e) {
-                String errorMsg = "天气变更失败：" + e.getMessage();
+                String errorMsg = "Weather change failed: " + e.getMessage();
                 result.set(errorMsg);
                 AusukaAiMod.LOGGER.error("变更天气时出错", e);
             }
@@ -139,33 +134,27 @@ public class WeatherTools {
         }
         
         final ServerWorld finalTargetWorld = targetWorld;
-        AtomicReference<String> result = new AtomicReference<>("时间设置失败");
+        AtomicReference<String> result = new AtomicReference<>("Time set failed");
         
         runOnMainAndWait(() -> {
             try {
                 long gameTime = parseTimeType(timeType);
                 if (gameTime == -1) {
-                    result.set("❌ 未知的时间类型：" + timeType + "。支持：day/白天, night/夜晚, noon/正午, midnight/午夜，或0-24000的数字");
+                    result.set("Unknown time type: " + timeType + ". Supported: day, night, noon, midnight or 0-24000");
                     return;
                 }
                 
                 finalTargetWorld.setTimeOfDay(gameTime);
                 
-                String timeName = getTimeDisplayName(gameTime);
+                String timeKey = resolveTimeKey(gameTime);
                 String worldName = getWorldDisplayName(finalTargetWorld);
                 
-                result.set("🕐 时间已设置为 " + timeName + " (世界: " + worldName + ")");
-                
-                // 广播时间变更消息
-                server.getPlayerManager().broadcast(
-                    Text.of("[Ausuka.ai] " + result.get()), 
-                    false
-                );
+                result.set("Time set to " + timeKey + " (world: " + worldName + ")");
                 AusukaAiMod.LOGGER.debug("{} [tool:set_time] result='{}'",
                         RequestContext.midTag(), result.get());
                 
             } catch (Exception e) {
-                String errorMsg = "时间设置失败：" + e.getMessage();
+                String errorMsg = "Time set failed: " + e.getMessage();
                 result.set(errorMsg);
                 AusukaAiMod.LOGGER.error("设置时间时出错", e);
             }
@@ -233,11 +222,11 @@ public class WeatherTools {
         }
     }
     
-    private String getTimeDisplayName(long gameTime) {
-        if (gameTime >= 0 && gameTime < 6000) return "白天";
-        if (gameTime >= 6000 && gameTime < 12000) return "正午";
-        if (gameTime >= 12000 && gameTime < 18000) return "夜晚";
-        return "午夜";
+    private String resolveTimeKey(long gameTime) {
+        if (gameTime >= 0 && gameTime < 6000) return "day";
+        if (gameTime >= 6000 && gameTime < 12000) return "noon";
+        if (gameTime >= 12000 && gameTime < 18000) return "night";
+        return "midnight";
     }
     
     private ServerWorld getTargetWorld(String worldName) {

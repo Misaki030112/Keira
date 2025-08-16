@@ -8,6 +8,7 @@ import com.hinadt.observability.RequestContext;
 import com.hinadt.tools.AdminTools;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import com.hinadt.util.PlayerLanguageCache;
 
 
 public class AiWorkflowManager {
@@ -52,9 +53,8 @@ public class AiWorkflowManager {
             String serverContext = buildServerContext();
             String toolAvailability = buildToolAvailability(isAdmin);
 
-            // Compose system prompt (system role); user text goes to user role.
-            // Determine client's preferred language for responses (fallback en_us)
-            String clientLocale = resolvePlayerLocale(player);
+            // Compose system prompt; reply language from cached client locale (default en_us)
+            String clientLocale = PlayerLanguageCache.code(player);
 
             String systemPrompt = promptComposer.composeSystemPrompt(
                     player,
@@ -151,19 +151,5 @@ public class AiWorkflowManager {
         return context.toString();
     }
     
-    /**
-     * Resolve the player's preferred locale from recent telemetry; fallback to en_us.
-     */
-    private String resolvePlayerLocale(ServerPlayerEntity player) {
-        String fallback = "en_us";
-        try (var session = com.hinadt.persistence.MyBatisSupport.getFactory().openSession(true)) {
-            var mapper = session.getMapper(com.hinadt.persistence.mapper.PlayerProfileMapper.class);
-            String locale = mapper.selectLastLocaleByUuid(player.getUuidAsString());
-            if (locale == null || locale.isBlank() || "unknown".equalsIgnoreCase(locale)) return fallback;
-            // Normalize common variants
-            return locale.replace('-', '_').toLowerCase();
-        } catch (Exception e) {
-            return fallback;
-        }
-    }
+    
 }

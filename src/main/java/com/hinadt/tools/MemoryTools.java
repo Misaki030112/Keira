@@ -121,7 +121,7 @@ public class MemoryTools {
         try {
             AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] params player='{}' name='{}'",
                     RequestContext.midTag(), playerName, locationName);
-            ConversationMemorySystem.LocationData location = 
+            com.hinadt.persistence.record.LocationRecord location = 
                 AiRuntime.getConversationMemory().getLocationForTeleport(playerName, locationName);
             
             if (location == null) {
@@ -133,8 +133,8 @@ public class MemoryTools {
                 "World: %s\n" +
                 "Coords: (%.1f, %.1f, %.1f)\n" +
                 "Description: %s",
-                    location.name(), location.world(), location.x(), location.y(), location.z(), location.description());
-            AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] hit name='{}' world='{}'", RequestContext.midTag(), location.name(), location.world());
+                    location.locationName(), location.world(), location.x(), location.y(), location.z(), location.description());
+            AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] hit name='{}' world='{}'", RequestContext.midTag(), location.locationName(), location.world());
             return out;
                 
         } catch (Exception e) {
@@ -159,7 +159,7 @@ public class MemoryTools {
         try {
             AusukaAiMod.LOGGER.debug("{} [tool:list_saved_locations] params player='{}'",
                     RequestContext.midTag(), playerName);
-            List<ConversationMemorySystem.LocationData> locations = 
+            java.util.List<com.hinadt.persistence.record.LocationRecord> locations = 
                 AiRuntime.getConversationMemory().getAllLocations(playerName);
             
             if (locations.isEmpty()) {
@@ -171,8 +171,8 @@ public class MemoryTools {
             result.append(String.format("📍 All saved locations for %s:\n\n", playerName));
             
             for (int i = 0; i < locations.size(); i++) {
-                ConversationMemorySystem.LocationData loc = locations.get(i);
-                result.append(String.format("%d. **%s**\n", i + 1, loc.name()));
+                var loc = locations.get(i);
+                result.append(String.format("%d. **%s**\n", i + 1, loc.locationName()));
                 result.append(String.format("   Coords: (%.1f, %.1f, %.1f)\n", loc.x(), loc.y(), loc.z()));
                 result.append(String.format("   World: %s\n", loc.world()));
                 result.append(String.format("   Description: %s\n\n", loc.description()));
