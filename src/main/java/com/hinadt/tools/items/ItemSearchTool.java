@@ -1,4 +1,5 @@
 package com.hinadt.tools.items;
+
 // ============================================================================
 // Item Search Tool (Fabric 1.21.x) — unconstrained redesign
 // - New DTO: ItemEntry (self-descriptive fields for AI consumers)
