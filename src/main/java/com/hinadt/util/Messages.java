@@ -20,10 +20,8 @@ public final class Messages {
      */
     public static void to(ServerPlayerEntity player, Text text) {
         try {
-            // 1.21 mappings provide sendMessageToClient(Text, boolean)
             player.sendMessageToClient(text, false);
         } catch (Throwable t) {
-            // Fallback: best-effort using legacy path
             player.sendMessage(text);
         }
     }

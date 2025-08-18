@@ -62,11 +62,6 @@ public class AiChatSystem {
                 String out = (response == null || response.isEmpty())
                         ? Text.translatable("ausuka.ai.no_response").getString()
                         : response;
-
-                String preview = out.substring(0, Math.min(180, out.length())).replaceAll("\n", " ");
-                AusukaAiMod.LOGGER.debug("[mid={}] [chat] Sending AI reply to player: player={}, len={}, preview='{}'",
-                        messageId, playerName, out.length(), preview);
-
                 AiServices.server().execute(() ->
                         Messages.to(player, Text.translatable("ausuka.ai.reply", out))
                 );

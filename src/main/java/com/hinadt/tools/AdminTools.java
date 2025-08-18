@@ -282,6 +282,4 @@ public class AdminTools {
             this.reason = reason;
         }
     }
-
-    // No local jail location storage; jail coordinates are looked up via MemoryTools.
 }

@@ -1,9 +1,9 @@
 package com.hinadt.util;
 
+import net.minecraft.network.packet.c2s.common.SyncedClientOptions;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 
-import java.lang.reflect.Method;
 import java.util.Locale;
 
 /**
@@ -27,11 +27,10 @@ public final class PlayerLocales {
     public static String code(ServerPlayerEntity player) {
         if (player == null) return DEFAULT_CODE;
         try {
-            Object opts = player.getClientOptions();
+            SyncedClientOptions opts = player.getClientOptions();
             if (opts == null) return DEFAULT_CODE;
 
-            // 1.21.8 (Yarn) exposes a record accessor: language()
-            String lang = invokeLanguageAccessor(opts);
+            String lang = opts.language();
             if (lang == null || lang.isBlank()) return DEFAULT_CODE;
             return normalize(lang);
         } catch (Throwable ignored) {
@@ -99,24 +98,5 @@ public final class PlayerLocales {
             return DEFAULT_CODE;
         }
         return c;
-    }
-
-    private static String invokeLanguageAccessor(Object clientOptions) {
-        // Prefer 1.21.8 record accessor: language()
-        String value = tryInvokeNoArgString(clientOptions, "language");
-        if (value != null) return value;
-
-        // Fallback for older mappings: getLanguage()
-        return tryInvokeNoArgString(clientOptions, "getLanguage");
-    }
-
-    private static String tryInvokeNoArgString(Object target, String methodName) {
-        try {
-            Method m = target.getClass().getMethod(methodName);
-            Object v = m.invoke(target);
-            return (v instanceof String s) ? s : null;
-        } catch (ReflectiveOperationException ignored) {
-            return null;
-        }
     }
 }

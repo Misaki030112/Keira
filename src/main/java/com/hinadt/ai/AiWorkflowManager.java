@@ -6,9 +6,9 @@ import com.hinadt.ai.prompt.PromptComposer;
 import com.hinadt.ai.tools.ToolRegistry;
 import com.hinadt.observability.RequestContext;
 import com.hinadt.tools.AdminTools;
+import com.hinadt.util.PlayerLanguageCache;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import com.hinadt.util.PlayerLanguageCache;
 
 
 public class AiWorkflowManager {
@@ -70,8 +70,8 @@ public class AiWorkflowManager {
 
             // Server-side logging: record latency to diagnose slow requests
             long start = System.currentTimeMillis();
-            AusukaAiMod.LOGGER.info("AI request start: player={}, msg='{}'", playerName, message);
-            AusukaAiMod.LOGGER.debug("{} [workflow] Context ready before AI call tools=[items, give, tp, memory, weather, effects, stats, world, admin] sysPromptLen={}", RequestContext.midTag(), systemPrompt.length());
+            AusukaAiMod.LOGGER.info("{} AI request start: player={}, msg='{}'",RequestContext.midTag() , playerName, message);
+            AusukaAiMod.LOGGER.debug("{} [workflow] Context ready before AI call  sysPrompt='''\n{}\n'''", RequestContext.midTag(), systemPrompt);
 
             String aiResponse = AiRuntime.AIClient
                     .prompt()
@@ -92,14 +92,13 @@ public class AiWorkflowManager {
                     .content();
 
             long cost = System.currentTimeMillis() - start;
-            if (cost > 8000) {
+            if (cost > 15000) {
                 AusukaAiMod.LOGGER.warn("AI request done (slow): player={}, cost={}ms", playerName, cost);
             } else {
                 AusukaAiMod.LOGGER.info("AI request done: player={}, cost={}ms", playerName, cost);
             }
             int respLen = aiResponse == null ? 0 : aiResponse.length();
-            String preview = aiResponse == null ? "" : aiResponse.substring(0, Math.min(180, aiResponse.length())).replaceAll("\n", " ");
-            AusukaAiMod.LOGGER.debug("{} [workflow] AI response len={}, preview='{}'", RequestContext.midTag(), respLen, preview);
+            AusukaAiMod.LOGGER.debug("{} [workflow] AI response to player={}, len={}, aiResponse='{}'",playerName, RequestContext.midTag(), respLen, aiResponse);
 
             memorySystem.saveAiResponse(playerName, aiResponse);
             return aiResponse;

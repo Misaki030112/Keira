@@ -23,24 +23,12 @@ public class PlayerJoinMixin {
     
     @Inject(method = "onPlayerConnect", at = @At("TAIL"))
     private void onPlayerJoin(ClientConnection connection, ServerPlayerEntity player, ConnectedClientData clientData, CallbackInfo ci) {
-        // Record the client information when the player joins (language, IP, etc.)
-        try {
-            PlayerTelemetryRecorder.recordJoin(player, connection, clientData);
-        } catch (Exception e) {
-            AusukaAiMod.LOGGER.warn("Error recording player connection information: " + e.getMessage());
-        }
 
-        // Cache player language (only updated on join/settings change)
-        try {
-            PlayerLanguageCache.update(player);
-        } catch (Exception e) {
-            AusukaAiMod.LOGGER.warn("Failed to cache player language: " + e.getMessage());
-        }
+        PlayerTelemetryRecorder.recordJoin(player,connection,clientData);
         // Delay sending the AI generated welcome message
         Objects.requireNonNull(player.getServer()).execute(() -> {
             try {
                 Thread.sleep(2000); // Wait 2 seconds to ensure the player is fully loaded
-
                 // Send an AI-generated welcome message (AI prompts are in English, and the reply language is based on the cache)
                 generateAiWelcomeMessage(player);
                 
@@ -77,6 +65,8 @@ public class PlayerJoinMixin {
             if (!AiRuntime.isReady()) {
                 throw new IllegalStateException("AI not configured");
             }
+
+            AusukaAiMod.LOGGER.debug("the prompt for AI generated player {} welcome message, {}", playerName, welcomePrompt);
 
             welcomeMessage = AiRuntime.AIClient
                     .prompt()

@@ -20,5 +20,6 @@ public abstract class ServerPlayerEntityMixin {
         // Refresh language from current options (read via PlayerLocales)
         PlayerLanguageCache.update((ServerPlayerEntity) (Object) this);
     }
+
 }
 

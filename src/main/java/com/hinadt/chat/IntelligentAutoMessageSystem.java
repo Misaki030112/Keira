@@ -6,10 +6,7 @@ import com.hinadt.ai.context.PlayerContextBuilder;
 import com.hinadt.util.Messages;
 import com.hinadt.util.PlayerLanguageCache;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 import java.util.HashMap;
@@ -120,7 +117,7 @@ Must be in: %s (fallback en_us). Do not include translation notes.
 """, responseLocale, worldContext);
 
             long start = System.currentTimeMillis();
-            AusukaAiMod.LOGGER.debug("AI broadcast request: locale={}, ctxPreview='{}'", responseLocale, preview(worldContext));
+            AusukaAiMod.LOGGER.debug("AI broadcast request: locale={}, ctx='''\n{}\n'''", responseLocale, worldContext);
 
             String message = AiRuntime.AIClient
                 .prompt()
@@ -130,7 +127,7 @@ Must be in: %s (fallback en_us). Do not include translation notes.
                 .content();
 
             long cost = System.currentTimeMillis() - start;
-            if (cost > 8000) {
+            if (cost > 15000) {
                 AusukaAiMod.LOGGER.warn("AI broadcast completed (slow): {} ms", cost);
             } else {
                 AusukaAiMod.LOGGER.info("AI broadcast completed: {} ms", cost);
@@ -183,7 +180,7 @@ Must be in the player's client language: %s (fallback en_us). No translation not
 """, responseLocale, ctx);
 
                 long start = System.currentTimeMillis();
-                AusukaAiMod.LOGGER.debug("AI personal request: player={}, locale={}", playerName, responseLocale);
+                AusukaAiMod.LOGGER.debug("AI personal request: player={}, playerCtx={}, locale={}", playerName,ctx , responseLocale);
 
                 String message = AiRuntime.AIClient
                     .prompt()
@@ -273,14 +270,6 @@ Must be in the player's client language: %s (fallback en_us). No translation not
         }
         return best;
     }
-
-    private static String preview(String s) {
-        if (s == null) return "";
-        s = s.replace('\n', ' ');
-        return s.substring(0, Math.min(160, s.length()));
-    }
-
-    // ---- Admin API ----
 
     /** Enable/disable the entire intelligent auto message system. */
     public static void toggleSystem(boolean enabled) { systemEnabled = enabled; }
