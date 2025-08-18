@@ -73,5 +73,29 @@
   "tool.time.day": "day",
   "tool.time.noon": "noon",
   "tool.time.night": "night",
-  "tool.time.midnight": "midnight"
+  "tool.time.midnight": "midnight",
+
+  "aim.stats.title": "§b[Ausuka.ai] §fUsage statistics",
+  "aim.stats.messages": "Total messages: %d",
+  "aim.stats.players": "Unique players: %d",
+  "aim.stats.sessions": "Conversations created: %d",
+  "aim.stats.inchat": "Players currently in AI chat: %d",
+  "aim.stats.footer": "§7Use /ai admin for more controls."
+,
+  "admin.kick.disconnect": "§c[System] You were kicked: %s",
+  "admin.kick.broadcast": "§e[Admin] §c%s §ewas kicked by §a%s §e- %s",
+  "admin.ban.disconnect": "§c[System] You are banned: %s",
+  "admin.ban.broadcast": "§e[Admin] §c%s §ewas banned by §a%s §e- %s",
+  "admin.freeze.frozen": "§c[System] You have been frozen by an admin.",
+  "admin.freeze.unfrozen": "§a[System] You have been unfrozen.",
+  "admin.teleport.to_player": "§e[Admin] You were teleported to %s",
+  "admin.teleport.to_coords": "§e[Admin] You were teleported to (%s, %s, %s)",
+  "admin.jail.jailed": "§c[System] You have been jailed.",
+  "admin.jail.released": "§a[System] You have been released.",
+
+  "tool.heal.done": "§b[Ausuka.ai] §fYou have been fully healed (health and hunger).",
+  "tool.effect.applied": "§b[Ausuka.ai] §fEffect %s applied (level %d, %s s)",
+  "tool.effect.cleared.all": "§b[Ausuka.ai] §fRemoved %s status effects.",
+  "tool.effect.cleared.negative": "§b[Ausuka.ai] §fRemoved %s negative effects.",
+  "tool.effect.cleared.specific": "§b[Ausuka.ai] §fRemoved %s specified effects."
 }

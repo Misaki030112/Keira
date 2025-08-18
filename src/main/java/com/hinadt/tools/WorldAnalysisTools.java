@@ -2,270 +2,492 @@ package com.hinadt.tools;
 
 import com.hinadt.AusukaAiMod;
 import com.hinadt.observability.RequestContext;
+import com.hinadt.util.MainThread;
+import net.minecraft.block.BedBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.BlockPos.Mutable;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.ChunkPos;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.biome.Biome;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
- * 世界分析工具
- * 分析玩家周围的环境、生物群系、方块等信息
+ * World analysis tools — deeply refactored, safe, and fast.
+ *
+ * Design goals:
+ * - Server-thread safety via MainThread helpers.
+ * - Sampling-based scanning + hard budgets to avoid stalls.
+ * - Stable identifiers for biome/block/entity names.
+ * - Clear, compact, English output.
  */
+@SuppressWarnings("resource")
 public class WorldAnalysisTools {
-    
+
+    // ---------- Limits & Defaults ----------
+    private static final int MAX_RADIUS_ANALYZE   = 24;
+    private static final int MAX_RADIUS_RESOURCES = 48;
+    private static final int DEF_RADIUS_ANALYZE   = 16;
+    private static final int DEF_RADIUS_RESOURCE  = 32;
+
+    // Work budgets to keep a single invocation lightweight
+    private static final int MAX_BLOCK_CHECKS   = 60_000;  // max block state reads per call
+    private static final int MAX_ENTITY_REPORT  = 6;       // top-K entity kinds to print
+    private static final int MAX_POS_RESULTS    = 128;     // absolute cap for positions we list
+    private static final int SURFACE_Y_DEPTH    = 6;       // how deep we peek below surface when sampling
+
     private final MinecraftServer server;
-    
+
     public WorldAnalysisTools(MinecraftServer server) {
         this.server = server;
     }
-    
+
+    // ============================================================
+    // analyze_surroundings
+    // ============================================================
     @Tool(
-        name = "analyze_surroundings",
-        description = """
-        高级环境分析工具：全面扫描并分析玩家周围的环境状况，提供详细的世界信息报告。
-        
-        分析维度：
-        - 生物群系识别：检测当前所在的生物群系类型和特征
-        - 地形分析：分析地形起伏、高度分布、地表特征
-        - 方块分布：统计周围重要方块类型和数量
-        - 实体检测：识别附近的生物、怪物、NPC等实体
-        - 资源评估：评估周围的资源分布和可利用性
-        - 环境安全：分析潜在威胁和安全状况
-        
-        智能特性：
-        - 自适应半径：根据需要调整扫描范围（最大50格）
-        - 多层次分析：从地表到地下的立体扫描
-        - 实时更新：提供当前准确的环境状态
-        - 智能筛选：过滤无关信息，突出重要发现
-        
-        适用场景：
-        - 建筑选址：评估建造地点的适宜性
-        - 资源勘探：寻找矿物和材料资源
-        - 安全评估：检测危险区域和威胁
-        - 生存规划：制定生存和发展策略
-        - 探险指导：为冒险活动提供环境情报
-        
-        报告内容：结构化的环境分析报告，包含定量数据和定性评估
+            name = "analyze_surroundings",
+            description = """
+        Analyze the environment around a player (sampling-based).
+        Reports: biome, height, weather/time, top nearby blocks (sampled), nearby entities (grouped), and a short suggestion.
+        Radius: default 16, max 24. Internal budgets prevent server stalls.
         """
     )
     public String analyzeSurroundings(
-        @ToolParam(description = "要分析环境的玩家名称") String playerName,
-        @ToolParam(description = "分析半径，默认16格") Integer radius
+            @ToolParam(description = "Player name or UUID") String playerName,
+            @ToolParam(description = "Scan radius (default 16, max 24)") Integer radius
     ) {
-        AusukaAiMod.LOGGER.debug("{} [tool:analyze_surroundings] params player='{}' radius={}",
-                RequestContext.midTag(), playerName, radius);
+        final String mid = RequestContext.midTag();
+        AusukaAiMod.LOGGER.debug("{} [tool:analyze_surroundings] player='{}' radius={}", mid, playerName, radius);
+
         ServerPlayerEntity player = findPlayer(playerName);
-        if (player == null) {
-            return "❌ 找不到玩家：" + playerName;
-        }
-        
-        int searchRadius = (radius != null && radius > 0 && radius <= 50) ? radius : 16;
-        
-        AtomicReference<String> result = new AtomicReference<>("");
-        
-        runOnMainAndWait(() -> {
+        if (player == null) return "❌ Player not found: " + playerName;
+
+        final int r = clamp(radius, DEF_RADIUS_ANALYZE, 1, MAX_RADIUS_ANALYZE);
+
+        return MainThread.callSync(server, () -> {
             try {
-                StringBuilder analysis = new StringBuilder();
-                BlockPos playerPos = player.getBlockPos();
                 ServerWorld world = player.getWorld();
-                
-                analysis.append("🔍 ").append(playerName).append(" 的环境分析：\n");
-                
-                // 生物群系信息
-                Biome biome = world.getBiome(playerPos).value();
-                String biomeName = getBiomeDisplayName(biome);
-                analysis.append("🌍 生物群系：").append(biomeName).append("\n");
-                
-                // 高度信息
-                int y = playerPos.getY();
-                String heightInfo = getHeightInfo(y);
-                analysis.append("📏 高度：Y=").append(y).append(" (").append(heightInfo).append(")\n");
-                
-                // 天气和时间
-                String weather = world.isRaining() ? (world.isThundering() ? "雷雨" : "下雨") : "晴朗";
-                String timeOfDay = getTimeOfDay(world.getTimeOfDay());
-                analysis.append("🌤️ 天气：").append(weather).append("，时间：").append(timeOfDay).append("\n");
-                
-                // 分析周围方块
-                Map<Block, Integer> blockCounts = analyzeNearbyBlocks(world, playerPos, searchRadius);
-                if (!blockCounts.isEmpty()) {
-                    analysis.append("🧱 周围主要方块：\n");
-                    blockCounts.entrySet().stream()
-                        .sorted(Map.Entry.<Block, Integer>comparingByValue().reversed())
-                        .limit(5)
-                        .forEach(entry -> {
-                            String blockName = getBlockDisplayName(entry.getKey());
-                            analysis.append("  • ").append(blockName).append(" x").append(entry.getValue()).append("\n");
-                        });
+                BlockPos pos = player.getBlockPos();
+                StringBuilder out = new StringBuilder(256);
+
+                // Biome / height / weather / time
+                String biomeName = getBiomeDisplayName(world, pos);
+                int y = pos.getY();
+                String heightInfo = getHeightBand(y);
+                String weather = world.isRaining() ? (world.isThundering() ? "Thunderstorm" : "Rain") : "Clear";
+                String tod = getTimeOfDay(world.getTimeOfDay());
+
+                out.append("🔎 Environment analysis for ").append(player.getName().getString()).append('\n');
+                out.append("🌍 Biome: ").append(biomeName).append('\n');
+                out.append("📏 Height: Y=").append(y).append(" (").append(heightInfo).append(")\n");
+                out.append("🌤️ Weather: ").append(weather).append(", Time: ").append(tod).append('\n');
+
+                // Sampled top blocks (surface-focused)
+                Map<Block, Integer> topBlocks = sampleTopBlocks(world, pos, r);
+                if (!topBlocks.isEmpty()) {
+                    out.append("🧱 Top nearby blocks:\n");
+                    topBlocks.entrySet().stream()
+                            .sorted(Map.Entry.<Block, Integer>comparingByValue().reversed())
+                            .limit(5)
+                            .forEach(e -> out.append("  • ")
+                                    .append(getBlockDisplayName(e.getKey()))
+                                    .append(" ×").append(e.getValue()).append('\n'));
                 }
-                
-                // 分析附近实体
-                List<String> nearbyEntities = analyzeNearbyEntities(world, playerPos, searchRadius);
-                if (!nearbyEntities.isEmpty()) {
-                    analysis.append("🐾 附近生物：").append(String.join("、", nearbyEntities)).append("\n");
+
+                // Nearby entities (non-player, grouped)
+                List<String> entityReport = listNearbyEntities(world, pos, r);
+                if (!entityReport.isEmpty()) {
+                    out.append("🐾 Nearby entities: ").append(String.join(", ", entityReport)).append('\n');
                 }
-                
-                // 提供环境建议
-                String suggestion = getEnvironmentSuggestion(biome, y, blockCounts);
-                if (suggestion != null) {
-                    analysis.append("💡 建议：").append(suggestion);
+
+                // Suggestion
+                String suggestion = suggest(world, pos, y, topBlocks);
+                if (!isBlank(suggestion)) {
+                    out.append("💡 Suggestion: ").append(suggestion);
                 }
-                
-                result.set(analysis.toString());
-                AusukaAiMod.LOGGER.debug("{} [tool:analyze_surroundings] analyzed biome='{}' radius={}",
-                        RequestContext.midTag(), biomeName, searchRadius);
-                
+
+                AusukaAiMod.LOGGER.debug("{} [tool:analyze_surroundings] biome='{}' r={}", mid, biomeName, r);
+                return out.toString();
             } catch (Exception e) {
-                result.set("❌ 分析环境时出错：" + e.getMessage());
-                AusukaAiMod.LOGGER.error("分析环境时出错", e);
+                AusukaAiMod.LOGGER.error("[tool:analyze_surroundings] error", e);
+                return "❌ Error during analysis: " + e.getMessage();
             }
         });
-        
-        return result.get();
     }
-    
+
+    // ============================================================
+    // find_resources
+    // ============================================================
     @Tool(
-        name = "find_resources",
-        description = """
-        在指定玩家周围搜索特定类型的资源或方块。
-        可以帮助玩家找到需要的材料。
+            name = "find_resources",
+            description = """
+        Search for resources around a player.
+        Types: ore / wood / water / lava / village (aliases supported: 矿物, 木材, 水源, 岩浆, 村庄).
+        Returns up to 128 positions with distance and direction. Internal budgets apply.
         """
     )
     public String findResources(
-        @ToolParam(description = "要搜索资源的玩家名称") String playerName,
-        @ToolParam(description = "资源类型：ore(矿物)、wood(木材)、water(水源)、village(村庄)等") String resourceType,
-        @ToolParam(description = "搜索半径，默认32格") Integer radius
+            @ToolParam(description = "Player name or UUID") String playerName,
+            @ToolParam(description = "Resource type") String resourceType,
+            @ToolParam(description = "Search radius (default 32, max 48)") Integer radius
     ) {
-        AusukaAiMod.LOGGER.debug("{} [tool:find_resources] params player='{}' type='{}' radius={}",
-                RequestContext.midTag(), playerName, resourceType, radius);
+        final String mid = RequestContext.midTag();
+        AusukaAiMod.LOGGER.debug("{} [tool:find_resources] player='{}' type='{}' radius={}", mid, playerName, resourceType, radius);
+
         ServerPlayerEntity player = findPlayer(playerName);
-        if (player == null) {
-            return "❌ 找不到玩家：" + playerName;
-        }
-        
-        int searchRadius = (radius != null && radius > 0 && radius <= 100) ? radius : 32;
-        
-        AtomicReference<String> result = new AtomicReference<>("");
-        
-        runOnMainAndWait(() -> {
+        if (player == null) return "❌ Player not found: " + playerName;
+
+        final String type = normalizeType(resourceType);
+        if (type == null) return "❌ Unknown resource type: " + resourceType;
+
+        // ores are expensive → clamp harder
+        final int req = clamp(radius, DEF_RADIUS_RESOURCE, 4, "ore".equals(type) ? 32 : MAX_RADIUS_RESOURCES);
+
+        return MainThread.callSync(server, () -> {
             try {
-                BlockPos playerPos = player.getBlockPos();
                 ServerWorld world = player.getWorld();
-                
-                List<BlockPos> foundPositions = searchForResources(world, playerPos, searchRadius, resourceType);
-                
-                if (foundPositions.isEmpty()) {
-                    result.set("🔍 在 " + searchRadius + " 格范围内没有找到 " + resourceType + " 类型的资源");
-                } else {
-                    StringBuilder report = new StringBuilder();
-                    report.append("🎯 找到 ").append(foundPositions.size()).append(" 个 ").append(resourceType).append(" 资源：\n");
-                    
-                    foundPositions.stream()
-                        .limit(10) // 限制显示数量
-                        .forEach(pos -> {
-                            int distance = (int) Math.sqrt(playerPos.getSquaredDistance(pos));
-                            String direction = getDirection(playerPos, pos);
-                            report.append("• 距离 ").append(distance).append(" 格，方向：").append(direction)
-                                .append(" (").append(pos.getX()).append(", ").append(pos.getY()).append(", ").append(pos.getZ()).append(")\n");
-                        });
-                    
-                    if (foundPositions.size() > 10) {
-                        report.append("... 还有 ").append(foundPositions.size() - 10).append(" 个位置");
-                    }
-                    
-                    result.set(report.toString());
-                    AusukaAiMod.LOGGER.debug("{} [tool:find_resources] found={} type='{}'",
-                            RequestContext.midTag(), foundPositions.size(), resourceType);
+                BlockPos center = player.getBlockPos();
+                List<BlockPos> found;
+
+                switch (type) {
+                    case "ore"    -> found = searchOres(world, center, req);
+                    case "wood"   -> found = searchWoodSurface(world, center, req);
+                    case "water"  -> found = searchFluidSurface(world, center, req, true);
+                    case "lava"   -> found = searchFluidSurface(world, center, req, false);
+                    case "village"-> found = searchVillageHints(world, center, req);
+                    default       -> { return "❌ Unknown resource type: " + resourceType; }
                 }
-                
+
+                if (found.isEmpty()) return "🔍 No " + type + " found within " + req + " blocks";
+
+                // Sort by distance and cap output
+                found = found.stream()
+                        .sorted(Comparator.comparingDouble(p -> center.getSquaredDistance(p)))
+                        .limit(Math.min(found.size(), MAX_POS_RESULTS))
+                        .collect(Collectors.toList());
+
+                StringBuilder out = new StringBuilder(256);
+                out.append("🎯 Found ").append(found.size()).append(" ").append(type).append(" locations:\n");
+                for (BlockPos p : found) {
+                    int d = (int) Math.sqrt(center.getSquaredDistance(p));
+                    String dir = directionOf(center, p);
+                    out.append("• ").append(d).append(" blocks, ").append(dir)
+                            .append(" (").append(p.getX()).append(", ").append(p.getY()).append(", ").append(p.getZ()).append(")\n");
+                }
+                return out.toString();
             } catch (Exception e) {
-                result.set("❌ 搜索资源时出错：" + e.getMessage());
-                AusukaAiMod.LOGGER.error("搜索资源时出错", e);
+                AusukaAiMod.LOGGER.error("[tool:find_resources] error", e);
+                return "❌ Error during search: " + e.getMessage();
             }
         });
-        
-        return result.get();
     }
-    
-    private Map<Block, Integer> analyzeNearbyBlocks(ServerWorld world, BlockPos center, int radius) {
-        Map<Block, Integer> blockCounts = new HashMap<>();
-        
-        for (int x = -radius; x <= radius; x++) {
-            for (int y = -radius; y <= radius; y++) {
-                for (int z = -radius; z <= radius; z++) {
-                    BlockPos pos = center.add(x, y, z);
-                    Block block = world.getBlockState(pos).getBlock();
-                    if (block != Blocks.AIR && block != Blocks.CAVE_AIR && block != Blocks.VOID_AIR) {
-                        blockCounts.merge(block, 1, Integer::sum);
+
+    // ============================================================
+    // Sampling / Searches
+    // ============================================================
+
+    /** Surface-oriented sampling: scan (x,z) grid, peek SURFACE_Y_DEPTH blocks downward. */
+    private Map<Block, Integer> sampleTopBlocks(ServerWorld world, BlockPos center, int radius) {
+        Map<Block, Integer> counts = new HashMap<>();
+        final Mutable m = new Mutable();
+        final int step = Math.max(1, radius / 8); // adaptive stride
+        int checks = 0;
+
+        for (int dx = -radius; dx <= radius; dx += step) {
+            for (int dz = -radius; dz <= radius; dz += step) {
+                if (checks >= MAX_BLOCK_CHECKS) break;
+
+                int x = center.getX() + dx;
+                int z = center.getZ() + dz;
+
+                if (!isChunkLoaded(world, x, z)) continue;
+
+                int topY = world.getTopY(Heightmap.Type.WORLD_SURFACE, x, z);
+                int minY = Math.max(world.getBottomY(), topY - SURFACE_Y_DEPTH);
+
+                for (int y = topY; y >= minY; y--) {
+                    if (checks++ >= MAX_BLOCK_CHECKS) break;
+                    m.set(x, y, z);
+                    Block b = world.getBlockState(m).getBlock();
+                    if (b == Blocks.AIR || b == Blocks.CAVE_AIR || b == Blocks.VOID_AIR) continue;
+                    counts.merge(b, 1, Integer::sum);
+                    break; // only the first non-air surface block at this column
+                }
+            }
+        }
+        return counts;
+    }
+
+    /** Group nearby non-player entities within a radius; return top kinds by count. */
+    private List<String> listNearbyEntities(ServerWorld world, BlockPos center, int radius) {
+        Box box = new Box(center).expand(radius);
+        Map<String, Integer> grouped = new HashMap<>();
+        for (Entity e : world.getOtherEntities(null, box)) {
+            if (e instanceof PlayerEntity) continue;
+            String id = getEntityKindId(e);
+            grouped.merge(id, 1, Integer::sum);
+        }
+        return grouped.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .limit(MAX_ENTITY_REPORT)
+                .map(e -> e.getKey() + (e.getValue() > 1 ? " ×" + e.getValue() : ""))
+                .collect(Collectors.toList());
+    }
+
+    /** Heuristic ore search with budget: coarse 3D sampling in a cube around center. */
+    private List<BlockPos> searchOres(ServerWorld world, BlockPos center, int radius) {
+        Set<Block> oreSet = oreBlocks();
+        List<BlockPos> out = new ArrayList<>();
+        final Mutable m = new Mutable();
+
+        // coarse steps: shrink as radius shrinks
+        final int step = Math.max(1, Math.min(6, Math.max(2, radius / 8)));
+        int checks = 0;
+
+        int worldMinY = world.getBottomY();
+        int worldMaxY = worldMinY + world.getDimension().height() - 1;
+        int minY = Math.max(worldMinY, center.getY() - radius);
+        int maxY = Math.min(worldMaxY, center.getY() + radius);
+
+        for (int x = center.getX() - radius; x <= center.getX() + radius; x += step) {
+            for (int z = center.getZ() - radius; z <= center.getZ() + radius; z += step) {
+                if (!isChunkLoaded(world, x, z)) continue;
+                for (int y = minY; y <= maxY; y += step) {
+                    if (checks++ >= MAX_BLOCK_CHECKS || out.size() >= MAX_POS_RESULTS) return out;
+                    m.set(x, y, z);
+                    Block b = world.getBlockState(m).getBlock();
+                    if (oreSet.contains(b)) out.add(m.toImmutable());
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Find logs at surface columns (treat *_log & stems as wood). */
+    private List<BlockPos> searchWoodSurface(ServerWorld world, BlockPos center, int radius) {
+        List<BlockPos> out = new ArrayList<>();
+        final Mutable m = new Mutable();
+        int checks = 0;
+        final int step = Math.max(1, Math.min(4, radius / 8));
+
+        for (int dx = -radius; dx <= radius; dx += step) {
+            for (int dz = -radius; dz <= radius; dz += step) {
+                if (checks >= MAX_BLOCK_CHECKS || out.size() >= MAX_POS_RESULTS) return out;
+
+                int x = center.getX() + dx;
+                int z = center.getZ() + dz;
+                if (!isChunkLoaded(world, x, z)) continue;
+
+                int topY = world.getTopY(Heightmap.Type.WORLD_SURFACE, x, z);
+                int minY = Math.max(world.getBottomY(), topY - SURFACE_Y_DEPTH);
+
+                for (int y = topY; y >= minY; y--) {
+                    checks++;
+                    m.set(x, y, z);
+                    Block b = world.getBlockState(m).getBlock();
+                    String path = idPath(Registries.BLOCK.getId(b));
+                    if (path.endsWith("_log") || path.endsWith("_stem")) {
+                        out.add(m.toImmutable());
+                        break;
                     }
                 }
             }
         }
-        
-        return blockCounts;
+        return out;
     }
-    
-    private List<String> analyzeNearbyEntities(ServerWorld world, BlockPos center, int radius) {
-        List<String> entities = new ArrayList<>();
-        Box searchBox = new Box(center).expand(radius);
-        
-        List<Entity> nearbyEntities = world.getOtherEntities(null, searchBox);
-        Map<String, Integer> entityCounts = new HashMap<>();
-        
-        for (Entity entity : nearbyEntities) {
-            if (!(entity instanceof PlayerEntity)) {
-                String entityType = getEntityDisplayName(entity);
-                entityCounts.merge(entityType, 1, Integer::sum);
+
+    /** Find surface fluids (water or lava) by peeking at top columns. */
+    private List<BlockPos> searchFluidSurface(ServerWorld world, BlockPos center, int radius, boolean water) {
+        List<BlockPos> out = new ArrayList<>();
+        final Mutable m = new Mutable();
+        int checks = 0;
+        final int step = Math.max(1, Math.min(4, radius / 8));
+
+        for (int dx = -radius; dx <= radius; dx += step) {
+            for (int dz = -radius; dz <= radius; dz += step) {
+                if (checks >= MAX_BLOCK_CHECKS || out.size() >= MAX_POS_RESULTS) return out;
+
+                int x = center.getX() + dx;
+                int z = center.getZ() + dz;
+                if (!isChunkLoaded(world, x, z)) continue;
+
+                int topY = world.getTopY(Heightmap.Type.WORLD_SURFACE, x, z);
+                int minY = Math.max(world.getBottomY(), topY - SURFACE_Y_DEPTH);
+
+                for (int y = topY; y >= minY; y--) {
+                    checks++;
+                    m.set(x, y, z);
+                    Block b = world.getBlockState(m).getBlock();
+                    if (water && b == Blocks.WATER) { out.add(m.toImmutable()); break; }
+                    if (!water && b == Blocks.LAVA) { out.add(m.toImmutable()); break; }
+                }
             }
         }
-        
-        entityCounts.forEach((type, count) -> {
-            if (count > 1) {
-                entities.add(type + " x" + count);
-            } else {
-                entities.add(type);
-            }
-        });
-        
-        return entities;
+        return out;
     }
-    
-    private List<BlockPos> searchForResources(ServerWorld world, BlockPos center, int radius, String resourceType) {
-        List<BlockPos> positions = new ArrayList<>();
-        Set<Block> targetBlocks = getTargetBlocks(resourceType);
-        
-        for (int x = -radius; x <= radius; x++) {
-            for (int y = -radius; y <= radius; y++) {
-                for (int z = -radius; z <= radius; z++) {
-                    BlockPos pos = center.add(x, y, z);
-                    Block block = world.getBlockState(pos).getBlock();
-                    if (targetBlocks.contains(block)) {
-                        positions.add(pos);
+
+    /** Village hints: nearby villagers, beds, and job-site blocks around surface. */
+    private List<BlockPos> searchVillageHints(ServerWorld world, BlockPos center, int radius) {
+        List<BlockPos> out = new ArrayList<>();
+
+        // 1) Villagers in radius
+        for (Entity e : world.getOtherEntities(null, new Box(center).expand(radius))) {
+            if (e instanceof VillagerEntity v) {
+                out.add(v.getBlockPos());
+                if (out.size() >= MAX_POS_RESULTS) return out;
+            }
+        }
+
+        // 2) Beds on/near surface (light sampling)
+        out.addAll(searchBedsNearSurface(world, center, radius, Math.max(1, radius / 10)));
+        if (out.size() > MAX_POS_RESULTS) {
+            return out.subList(0, MAX_POS_RESULTS);
+        }
+
+        return out;
+    }
+
+    private List<BlockPos> searchBedsNearSurface(ServerWorld world, BlockPos center, int radius, int step) {
+        List<BlockPos> out = new ArrayList<>();
+        final Mutable m = new Mutable();
+        int checks = 0;
+
+        for (int dx = -radius; dx <= radius; dx += step) {
+            for (int dz = -radius; dz <= radius; dz += step) {
+                if (checks >= MAX_BLOCK_CHECKS || out.size() >= MAX_POS_RESULTS) return out;
+
+                int x = center.getX() + dx;
+                int z = center.getZ() + dz;
+                if (!isChunkLoaded(world, x, z)) continue;
+
+                int topY = world.getTopY(Heightmap.Type.WORLD_SURFACE, x, z);
+                int minY = Math.max(world.getBottomY(), topY - SURFACE_Y_DEPTH);
+
+                for (int y = topY; y >= minY; y--) {
+                    checks++;
+                    m.set(x, y, z);
+                    if (world.getBlockState(m).getBlock() instanceof BedBlock) {
+                        out.add(m.toImmutable());
+                        break;
                     }
                 }
             }
         }
-        
-        return positions;
+        return out;
     }
-    
-    private Set<Block> getTargetBlocks(String resourceType) {
-        return switch (resourceType.toLowerCase()) {
-            case "ore", "矿物" -> Set.of(
+
+    // ============================================================
+    // Naming / Utils
+    // ============================================================
+
+    private String getBiomeDisplayName(ServerWorld world, BlockPos pos) {
+        RegistryEntry<Biome> entry = world.getBiome(pos);
+        Identifier id = entry.getKey().map(k -> k.getValue()).orElse(null);
+        String path = id != null ? id.getPath() : entry.toString();
+        return switch (path) {
+            case "plains" -> "Plains";
+            case "forest" -> "Forest";
+            case "desert" -> "Desert";
+            case "windswept_hills", "mountains" -> "Mountains";
+            case "ocean" -> "Ocean";
+            case "river" -> "River";
+            case "swamp" -> "Swamp";
+            case "taiga" -> "Taiga";
+            case "savanna" -> "Savanna";
+            case "badlands" -> "Badlands";
+            case "jungle" -> "Jungle";
+            case "snowy_plains", "ice_spikes" -> "Snowy Plains";
+            case "nether_wastes" -> "Nether Wastes";
+            case "the_end" -> "The End";
+            default -> path.replace('_', ' ');
+        };
+    }
+
+    private String getBlockDisplayName(Block block) {
+        return idPath(Registries.BLOCK.getId(block)).replace('_', ' ');
+    }
+
+    private String getEntityKindId(Entity entity) {
+        Identifier id = Registries.ENTITY_TYPE.getId(entity.getType());
+        if (entity instanceof VillagerEntity) return "villager";
+        return id != null ? id.getPath() : entity.getType().toString();
+    }
+
+    private String directionOf(BlockPos from, BlockPos to) {
+        int dx = to.getX() - from.getX();
+        int dz = to.getZ() - from.getZ();
+        boolean eastWest = Math.abs(dx) >= Math.abs(dz);
+        if (eastWest) return dx >= 0 ? "East" : "West";
+        else          return dz >= 0 ? "South" : "North";
+    }
+
+    private String getTimeOfDay(long time) {
+        long t = time % 24000L;
+        if (t < 6000)  return "Morning";
+        if (t < 12000) return "Noon";
+        if (t < 18000) return "Night";
+        return "Midnight";
+    }
+
+    private String getHeightBand(int y) {
+        if (y < 0)   return "Deep underground";
+        if (y < 16)  return "Lower underground";
+        if (y < 64)  return "Underground";
+        if (y < 80)  return "Surface";
+        if (y < 120) return "Highland";
+        if (y < 200) return "Mountain";
+        return "Sky";
+    }
+
+    private String suggest(ServerWorld world, BlockPos pos, int y, Map<Block, Integer> sampledBlocks) {
+        if (y < 16 && sampledBlocks.containsKey(Blocks.STONE)) {
+            return "Great for mining. Bring torches and food.";
+        }
+        String biome = getBiomeDisplayName(world, pos).toLowerCase(Locale.ROOT);
+        if (biome.contains("desert")) return "Nights can be dangerous. Build a shelter.";
+        if (biome.contains("ocean"))  return "Good for fishing and ocean monuments.";
+        if (biome.contains("forest")) return "Excellent for wood. Watch for mobs at night.";
+        if (biome.contains("mountain")) return "Wide view; consider towers or a cliff base.";
+        if (biome.contains("plains")) return "Ideal for large builds and farms.";
+        return "Looks good for exploration and building.";
+    }
+
+    private boolean isChunkLoaded(ServerWorld world, int blockX, int blockZ) {
+        ChunkPos cp = new ChunkPos(blockX >> 4, blockZ >> 4);
+        return world.isChunkLoaded(cp.x, cp.z);
+    }
+
+    private String normalizeType(String t) {
+        if (isBlank(t)) return null;
+        String s = t.trim().toLowerCase(Locale.ROOT);
+        return switch (s) {
+            case "ore", "矿物" -> "ore";
+            case "wood", "木材" -> "wood";
+            case "water", "水", "水源" -> "water";
+            case "lava", "岩浆" -> "lava";
+            case "village", "村庄" -> "village";
+            default -> null;
+        };
+    }
+
+    private Set<Block> oreBlocks() {
+        return Set.of(
                 Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE,
                 Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE,
                 Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE,
@@ -273,179 +495,35 @@ public class WorldAnalysisTools {
                 Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE,
                 Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE,
                 Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE,
-                Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE
-            );
-            case "wood", "木材" -> Set.of(
-                Blocks.OAK_LOG, Blocks.BIRCH_LOG, Blocks.SPRUCE_LOG,
-                Blocks.JUNGLE_LOG, Blocks.ACACIA_LOG, Blocks.DARK_OAK_LOG,
-                Blocks.MANGROVE_LOG, Blocks.CHERRY_LOG
-            );
-            case "water", "水源" -> Set.of(Blocks.WATER);
-            case "lava", "岩浆" -> Set.of(Blocks.LAVA);
-            default -> Set.of();
-        };
+                Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE,
+                Blocks.NETHER_GOLD_ORE, Blocks.ANCIENT_DEBRIS
+        );
     }
-    
-    private String getDirection(BlockPos from, BlockPos to) {
-        int dx = to.getX() - from.getX();
-        int dz = to.getZ() - from.getZ();
-        
-        if (Math.abs(dx) > Math.abs(dz)) {
-            return dx > 0 ? "东" : "西";
-        } else {
-            return dz > 0 ? "南" : "北";
-        }
+
+    private String idPath(Identifier id) {
+        return id == null ? "unknown" : id.getPath();
     }
-    
-    private String getBiomeDisplayName(Biome biome) {
-        // 这里可以添加更多生物群系的中文名称映射
-        // Use toString() method as fallback since Registries.BIOME might not be available
-        String biomeName = biome.toString();
-        String biomePath = extractBiomePath(biomeName);
-        
-        return switch (biomePath.toLowerCase()) {
-            case "plains" -> "平原";
-            case "forest" -> "森林";
-            case "desert" -> "沙漠";
-            case "mountains", "mountain" -> "山地";
-            case "ocean" -> "海洋";
-            case "river" -> "河流";
-            case "swamp" -> "沼泽";
-            case "taiga" -> "针叶林";
-            case "savanna" -> "热带草原";
-            case "badlands" -> "恶地";
-            case "jungle" -> "丛林";
-            case "ice_plains", "tundra" -> "冰原";
-            case "nether_wastes" -> "下界荒地";
-            case "the_end" -> "末地";
-            default -> biomePath;
-        };
+
+    private static boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
     }
-    
-    private String getBlockDisplayName(Block block) {
-        String blockPath = Registries.BLOCK.getId(block).getPath();
-        return switch (blockPath) {
-            case "stone" -> "石头";
-            case "dirt" -> "泥土";
-            case "grass_block" -> "草方块";
-            case "oak_log" -> "橡木原木";
-            case "water" -> "水";
-            case "sand" -> "沙子";
-            case "coal_ore" -> "煤矿石";
-            case "iron_ore" -> "铁矿石";
-            case "diamond_ore" -> "钻石矿石";
-            default -> blockPath.replace("_", " ");
-        };
+
+    private int clamp(Integer v, int defVal, int min, int max) {
+        if (v == null) return defVal;
+        return Math.max(min, Math.min(max, v));
     }
-    
-    private String getEntityDisplayName(Entity entity) {
-        String entityType = entity.getType().toString();
-        if (entity instanceof VillagerEntity) {
-            return "村民";
-        }
-        return switch (entityType) {
-            case "cow" -> "牛";
-            case "pig" -> "猪";
-            case "sheep" -> "羊";
-            case "chicken" -> "鸡";
-            case "zombie" -> "僵尸";
-            case "skeleton" -> "骷髅";
-            case "creeper" -> "苦力怕";
-            case "spider" -> "蜘蛛";
-            default -> entityType;
-        };
-    }
-    
-    private String getHeightInfo(int y) {
-        if (y < 0) return "地下深层";
-        if (y < 16) return "深层挖矿区";
-        if (y < 64) return "地下";
-        if (y < 80) return "地表";
-        if (y < 120) return "高地";
-        if (y < 200) return "山地";
-        return "高空";
-    }
-    
-    private String getTimeOfDay(long timeOfDay) {
-        long time = timeOfDay % 24000;
-        if (time < 6000) return "白天";
-        if (time < 12000) return "正午";
-        if (time < 18000) return "夜晚";
-        return "午夜";
-    }
-    
-    private String getEnvironmentSuggestion(Biome biome, int y, Map<Block, Integer> blocks) {
-        String biomePath = extractBiomePath(biome.toString());
-        
-        if (y < 16 && blocks.containsKey(Blocks.STONE)) {
-            return "这里适合挖矿！注意带足够的火把和食物。";
-        }
-        
-        return switch (biomePath.toLowerCase()) {
-            case "desert" -> "沙漠地区要小心夜晚的怪物，建议建造避难所。";
-            case "ocean" -> "海洋地区适合钓鱼和寻找海底遗迹。";
-            case "forest" -> "森林是获取木材的好地方，也要小心夜晚的怪物。";
-            case "mountains", "mountain" -> "山地视野开阔，适合建造高塔或城堡。";
-            case "plains" -> "平原适合建造大型建筑和农场。";
-            default -> "这个环境很适合探索和建造！";
-        };
-    }
-    
+
+    // ============================================================
+    // Player lookup
+    // ============================================================
     private ServerPlayerEntity findPlayer(String nameOrUuid) {
         ServerPlayerEntity byName = server.getPlayerManager().getPlayer(nameOrUuid);
         if (byName != null) return byName;
-        
         try {
             UUID u = UUID.fromString(nameOrUuid);
             return server.getPlayerManager().getPlayer(u);
         } catch (Exception ignore) {
             return null;
         }
-    }
-    
-    private void runOnMainAndWait(Runnable task) {
-        if (server.isOnThread()) {
-            task.run();
-            return;
-        }
-        CountDownLatch latch = new CountDownLatch(1);
-        server.execute(() -> {
-            try { task.run(); } finally { latch.countDown(); }
-        });
-        try { latch.await(); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-    }
-    
-    /**
-     * Helper method to extract biome path from biome toString representation
-     */
-    private String extractBiomePath(String biomeString) {
-        // Try to extract the path from the string representation
-        if (biomeString.contains("ResourceKey")) {
-            // Format might be like "ResourceKey[minecraft:biome / minecraft:plains]"
-            int lastSlash = biomeString.lastIndexOf('/');
-            if (lastSlash > 0 && lastSlash < biomeString.length() - 1) {
-                String path = biomeString.substring(lastSlash + 1);
-                path = path.replaceAll("[\\]\\)]", "").trim();
-                if (path.startsWith("minecraft:")) {
-                    path = path.substring("minecraft:".length());
-                }
-                return path;
-            }
-        }
-        
-        // Fallback to simple name extraction
-        String simpleName = biomeString.toLowerCase();
-        if (simpleName.contains("plains")) return "plains";
-        if (simpleName.contains("forest")) return "forest";
-        if (simpleName.contains("desert")) return "desert";
-        if (simpleName.contains("mountains") || simpleName.contains("hills")) return "mountains";
-        if (simpleName.contains("ocean")) return "ocean";
-        if (simpleName.contains("river")) return "river";
-        if (simpleName.contains("swamp")) return "swamp";
-        if (simpleName.contains("jungle")) return "jungle";
-        if (simpleName.contains("taiga")) return "taiga";
-        if (simpleName.contains("tundra") || simpleName.contains("ice")) return "ice_plains";
-        
-        return biomeString; // 返回原名作为备选
     }
 }

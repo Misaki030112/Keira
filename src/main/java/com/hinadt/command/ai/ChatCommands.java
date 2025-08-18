@@ -112,6 +112,11 @@ public final class ChatCommands {
         return 1;
     }
 
+    /**
+     * One-shot ask: Sends a single message to the AI without using or updating
+     * any conversation session/history. Replies are localized to the player's client language.
+     */
+    @SuppressWarnings("resource")
     public static int sayOnce(CommandContext<ServerCommandSource> ctx) {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
@@ -126,12 +131,12 @@ public final class ChatCommands {
         String msg = StringArgumentType.getString(ctx, "message");
         String messageId = UUID.randomUUID().toString();
         CompletableFuture
-            .supplyAsync(() -> AiServices.workflow().processPlayerMessage(player, msg, messageId),
+            .supplyAsync(() -> AiServices.workflow().processSingleTurnMessage(player, msg, messageId),
                     AiRuntime.AI_EXECUTOR)
             .orTimeout(60, TimeUnit.SECONDS)
             .whenComplete((response, ex) -> {
                 if (ex != null) {
-                    AusukaAiMod.LOGGER.warn("[mid={}] 处理 /ai say 超时或失败: {}", messageId, ex.toString());
+                    AusukaAiMod.LOGGER.warn("[mid={}] /ai say timed out or failed: {}", messageId, ex.toString());
                     AiServices.server().execute(() -> Messages.to(player, Text.translatable("aim.say.error")));
                     return;
                 }
@@ -139,7 +144,7 @@ public final class ChatCommands {
                         ? Text.translatable("aim.say.no_response").getString()
                         : response;
                 String preview = out.substring(0, Math.min(180, out.length())).replaceAll("\n", " ");
-                AusukaAiMod.LOGGER.debug("[mid={}] [/ai say] 发送AI回复给玩家 player={}, len={}, preview='{}'",
+                AusukaAiMod.LOGGER.debug("[mid={}] [/ai say] Sending AI reply to player={}, len={}, preview='{}'",
                         messageId, player.getName().getString(), out.length(), preview);
                 AiServices.server().execute(() -> Messages.to(player, Text.translatable("ausuka.ai.reply", out)));
             });

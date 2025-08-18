@@ -24,7 +24,7 @@ public class AiChatSystem {
     public static void initialize() {
         // Service wiring is done in AiServices; here we only attach listeners.
         registerChatListener();
-        AusukaAiMod.LOGGER.info("AI聊天系统初始化完成！");
+        AusukaAiMod.LOGGER.info("AI chat system initialized.");
     }
 
     private static void registerChatListener() {
@@ -42,7 +42,7 @@ public class AiChatSystem {
     private static void handleAiChatMessage(ServerPlayerEntity player, String message) {
         String playerName = player.getName().getString();
         String messageId = UUID.randomUUID().toString();
-        AusukaAiMod.LOGGER.debug("[mid={}] [chat] 收到玩家消息: player={}, msg='{}'", messageId, playerName, message);
+        AusukaAiMod.LOGGER.debug("[mid={}] [chat] Received player message: player={}, msg='{}'", messageId, playerName, message);
 
         // Process on dedicated pool with a guard timeout, switch back to main thread to reply
         CompletableFuture
@@ -51,7 +51,7 @@ public class AiChatSystem {
             .orTimeout(60, TimeUnit.SECONDS)
             .whenComplete((response, ex) -> {
                 if (ex != null) {
-                    AusukaAiMod.LOGGER.warn("[mid={}] [chat] 处理消息失败/超时: player={}, err={}", messageId, playerName, ex.toString());
+                    AusukaAiMod.LOGGER.warn("[mid={}] [chat] Message processing failed or timed out: player={}, err={}", messageId, playerName, ex.toString());
                     AiServices.server().execute(() -> {
                         MutableText t = Text.translatable("ausuka.ai.timeout");
                         Messages.to(player, Text.of("§c").copy().append(t));
@@ -64,7 +64,7 @@ public class AiChatSystem {
                         : response;
 
                 String preview = out.substring(0, Math.min(180, out.length())).replaceAll("\n", " ");
-                AusukaAiMod.LOGGER.debug("[mid={}] [chat] 发送AI回复给玩家 player={}, len={}, preview='{}'",
+                AusukaAiMod.LOGGER.debug("[mid={}] [chat] Sending AI reply to player: player={}, len={}, preview='{}'",
                         messageId, playerName, out.length(), preview);
 
                 AiServices.server().execute(() ->

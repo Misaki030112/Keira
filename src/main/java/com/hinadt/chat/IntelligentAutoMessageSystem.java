@@ -2,214 +2,234 @@ package com.hinadt.chat;
 
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
+import com.hinadt.ai.context.PlayerContextBuilder;
 import com.hinadt.util.Messages;
+import com.hinadt.util.PlayerLanguageCache;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.world.World;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * AI驱动的智能自动消息系统
- * 基于世界状态和玩家情况生成智能提示和建议
+ * Intelligent Auto Message System (AI-driven).
+ *
+ * Responsibilities:
+ * - Periodically broadcast server-wide tips based on world state.
+ * - Periodically send personalized tips to players based on their status.
+ *
+ * UX:
+ * - Broadcasts are shown as non-chat HUD overlays (action bar) to avoid clutter.
+ *   True top-right "toast" notifications require a client-side UI implementation;
+ *   until then we use overlay/actionbar as a toast-like substitute.
+ * - Personalized messages are delivered via localized system messages.
+ *
+ * Internationalization policy:
+ * - Personalized outputs: AI must reply in each player's client language.
+ * - Broadcast outputs: AI must reply in the majority language among online players
+ *   (fallback en_us when unknown or tied).
+ *
+ * Admin controls:
+ * - toggleSystem(boolean): enable/disable the whole feature set.
+ * - toggleBroadcasts(boolean): enable/disable periodic broadcasts only.
+ * - togglePersonalized(boolean): enable/disable periodic personalized tips only.
+ * - togglePlayerAutoMessages(String, boolean): per-player opt-out of personalized tips.
+ *   Usage: call these from your command handlers (see com.hinadt.command). For example,
+ *   a command like "/ai-auto broadcast off" can call toggleBroadcasts(false), and
+ *   "/ai-auto personal off <player>" can call togglePlayerAutoMessages(name, false).
  */
-@SuppressWarnings("resource")
 public class IntelligentAutoMessageSystem {
-    
+
     private static MinecraftServer server;
     private static ScheduledExecutorService scheduler;
-    private static boolean systemEnabled = true;
+
+    // global and fine-grained switches
+    private static volatile boolean systemEnabled = true;
+    private static volatile boolean broadcastsEnabled = true;
+    private static volatile boolean personalizedEnabled = true;
+
     private static final ConcurrentHashMap<String, Boolean> playerOptOut = new ConcurrentHashMap<>();
-    
-    // 消息发送间隔（分钟）
-    private static final int BROADCAST_INTERVAL = 15; // 全服广播间隔
-    private static final int PERSONAL_INTERVAL = 10;  // 个人消息间隔
-    
+
+    // scheduling intervals (minutes)
+    private static final int BROADCAST_INTERVAL_MIN = 15;
+    private static final int PERSONAL_INTERVAL_MIN = 10;
+
     public static void initialize(MinecraftServer minecraftServer) {
         server = minecraftServer;
         scheduler = Executors.newScheduledThreadPool(2);
-        
-        // 定期发送AI驱动的广播消息
+
+        // periodic AI-driven broadcast
         scheduler.scheduleAtFixedRate(
-            IntelligentAutoMessageSystem::sendAiBroadcastMessage, 
-            BROADCAST_INTERVAL, 
-            BROADCAST_INTERVAL, 
+            IntelligentAutoMessageSystem::sendAiBroadcastMessage,
+            BROADCAST_INTERVAL_MIN,
+            BROADCAST_INTERVAL_MIN,
             TimeUnit.MINUTES
         );
-        
-        // 定期发送个性化消息
+
+        // periodic personalized tips
         scheduler.scheduleAtFixedRate(
             IntelligentAutoMessageSystem::sendPersonalizedMessages,
-            PERSONAL_INTERVAL,
-            PERSONAL_INTERVAL,
+            PERSONAL_INTERVAL_MIN,
+            PERSONAL_INTERVAL_MIN,
             TimeUnit.MINUTES
         );
-        
-        AusukaAiMod.LOGGER.info("智能自动消息系统已启动！");
+
+        AusukaAiMod.LOGGER.info("Intelligent auto message system started.");
     }
-    
+
     public static void shutdown() {
         if (scheduler != null) {
             scheduler.shutdown();
         }
     }
-    
-    /**
-     * 发送AI驱动的全服广播消息
-     */
+
+    // ---- Broadcasts ----
+
     private static void sendAiBroadcastMessage() {
-        if (!systemEnabled || !AiRuntime.isReady() || server.getPlayerManager().getPlayerList().isEmpty()) {
+        if (!systemEnabled || !broadcastsEnabled || !AiRuntime.isReady() || server.getPlayerManager().getPlayerList().isEmpty()) {
             return;
         }
-        
+
         try {
             String worldContext = gatherWorldContext();
-            String broadcastPrompt = String.format("""
-                作为Minecraft服务器的AI助手，生成一条有趣且有用的全服广播消息。
-                
-                当前服务器状态：
-                %s
-                
-                请生成一条消息，可以包括：
-                1. 基于当前世界状态的建议（天气、时间等）
-                2. 游戏技巧分享
-                3. 鼓励性的话语
-                4. 有趣的游戏事实
-                5. 活动建议
-                
-                消息要求：
-                - 简洁有趣，不超过100字
-                - 与当前游戏状态相关
-                - 用中文
-                - 包含合适的emoji
-                - 不要重复之前的内容
-                """, worldContext);
-            
+            String responseLocale = majorityLocaleCode();
+
+            String prompt = String.format("""
+You are Ausuka.ai, an in-server assistant for Minecraft.
+Task: Generate a concise, fun, useful server-wide tip based on current world state.
+
+[Output Language]
+Must be in: %s (fallback en_us). Do not include translation notes.
+
+[Content Requirements]
+- Keep it short (<= 120 characters, including emoji if helpful).
+- Make it relevant to the current world status.
+- Avoid repetition of previous generic content.
+- No Markdown, no code blocks.
+
+[World Status]
+%s
+""", responseLocale, worldContext);
+
             long start = System.currentTimeMillis();
-            AusukaAiMod.LOGGER.info("AI广播请求开始: prompt='{}'", broadcastPrompt);
+            AusukaAiMod.LOGGER.debug("AI broadcast request: locale={}, ctxPreview='{}'", responseLocale, preview(worldContext));
 
             String message = AiRuntime.AIClient
                 .prompt()
-                .system("你是 Ausuka.ai：负责生成简洁、有趣、与当前服务器状态相关的全服广播消息，使用中文和合适的emoji。")
-                .user(broadcastPrompt)
+                .system("You are Ausuka.ai. Compose brief, relevant broadcast tips in the requested language only.")
+                .user(prompt)
                 .call()
                 .content();
 
             long cost = System.currentTimeMillis() - start;
             if (cost > 8000) {
-                AusukaAiMod.LOGGER.warn("AI广播请求完成(慢): 耗时={}ms", cost);
+                AusukaAiMod.LOGGER.warn("AI broadcast completed (slow): {} ms", cost);
             } else {
-                AusukaAiMod.LOGGER.info("AI广播请求完成: 耗时={}ms", cost);
+                AusukaAiMod.LOGGER.info("AI broadcast completed: {} ms", cost);
             }
-            
-                server.execute(() -> {
-                    server.getPlayerManager().getPlayerList().forEach(p ->
-                        Messages.to(p, Text.translatable("ausuka.auto.broadcast", message))
-                    );
-                });
-            
+
+            server.execute(() -> server.getPlayerManager().getPlayerList().forEach(p ->
+                Messages.overlay(p, Text.translatable("ausuka.auto.broadcast", message))
+            ));
+
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("生成AI广播消息时出错", e);
+            AusukaAiMod.LOGGER.error("Failed to generate AI broadcast message", e);
         }
     }
-    
-    /**
-     * 发送个性化消息给每个玩家
-     */
+
+    // ---- Personalized ----
+
     private static void sendPersonalizedMessages() {
-        if (!systemEnabled || !AiRuntime.isReady()) {
+        if (!systemEnabled || !personalizedEnabled || !AiRuntime.isReady()) {
             return;
         }
-        
+
         server.getPlayerManager().getPlayerList().forEach(player -> {
             String playerName = player.getName().getString();
-            
-            // 检查玩家是否选择退出
-            if (playerOptOut.getOrDefault(playerName, false)) {
-                return;
-            }
-            
-            // 检查玩家是否在AI聊天模式（避免打扰）
-            if (AiChatSystem.isInAiChatMode(playerName)) {
-                return;
-            }
-            
+
+            // per-player opt-out
+            if (playerOptOut.getOrDefault(playerName, false)) return;
+
+            // do not interrupt an ongoing AI chat session
+            if (AiChatSystem.isInAiChatMode(playerName)) return;
+
             try {
-                String playerContext = gatherPlayerContext(player);
-                String personalPrompt = String.format("""
-                    为玩家 %s 生成一条个性化的AI提示消息。
-                    
-                    玩家状态：
-                    %s
-                    
-                    请根据玩家的具体情况生成建议，可以包括：
-                    1. 基于玩家位置的建议（如在地下挖矿提醒、在海边钓鱼等）
-                    2. 健康状态建议（如生命值低时建议治疗）
-                    3. 环境相关提示（在特定生物群系的建议）
-                    4. 个性化游戏建议
-                    5. 资源管理建议
-                    
-                    消息要求：
-                    - 简洁实用，不超过80字
-                    - 针对性强，与玩家当前状态相关
-                    - 用中文
-                    - 友好亲切的语调
-                    - 包含实用的游戏建议
-                    """, playerName, playerContext);
-                
+                // Player context as English JSON for stable AI input
+                String ctx = new PlayerContextBuilder().build(player);
+                String responseLocale = PlayerLanguageCache.code(player);
+
+                String prompt = String.format("""
+You are Ausuka.ai, a helpful in-server assistant.
+Task: Provide a short, actionable, friendly tip tailored to the player's current status.
+
+[Output Language]
+Must be in the player's client language: %s (fallback en_us). No translation notes.
+
+[Constraints]
+- <= 100 characters.
+- Be specific and practical.
+- No Markdown, no code blocks.
+
+[Player Context JSON]
+%s
+""", responseLocale, ctx);
+
                 long start = System.currentTimeMillis();
-                AusukaAiMod.LOGGER.info("AI个性化请求开始: 玩家={}, prompt='{}'", playerName, personalPrompt);
+                AusukaAiMod.LOGGER.debug("AI personal request: player={}, locale={}", playerName, responseLocale);
 
                 String message = AiRuntime.AIClient
                     .prompt()
-                    .system("你是 Ausuka.ai：为特定玩家生成简洁、实用、与其当前状态相关的个性化中文建议，不超过80字，包含emoji。")
-                    .user(personalPrompt)
+                    .system("You are Ausuka.ai. Produce concise, practical, localized tips based on the given JSON context.")
+                    .user(prompt)
                     .call()
                     .content();
 
                 long cost = System.currentTimeMillis() - start;
                 if (cost > 8000) {
-                    AusukaAiMod.LOGGER.warn("AI个性化请求完成(慢): 玩家={}, 耗时={}ms", playerName, cost);
+                    AusukaAiMod.LOGGER.warn("AI personal completed (slow): player={}, {} ms", playerName, cost);
                 } else {
-                    AusukaAiMod.LOGGER.info("AI个性化请求完成: 玩家={}, 耗时={}ms", playerName, cost);
+                    AusukaAiMod.LOGGER.info("AI personal completed: player={}, {} ms", playerName, cost);
                 }
-                
+
                 server.execute(() -> Messages.to(player, Text.translatable("ausuka.auto.personal", message)));
-                
+
             } catch (Exception e) {
-                AusukaAiMod.LOGGER.error("生成个性化消息时出错: " + playerName, e);
+                AusukaAiMod.LOGGER.error("Failed to generate personalized message: " + playerName, e);
             }
         });
     }
-    
-    /**
-     * 收集世界上下文信息
-     */
+
+    // ---- Context builders ----
+
+    /** Collect a minimal English world context for AI prompts. */
     private static String gatherWorldContext() {
         StringBuilder context = new StringBuilder();
-        
-        context.append("在线玩家数: ").append(server.getPlayerManager().getPlayerList().size()).append("\n");
-        
-        // 获取主世界信息
-            var overworld = server.getWorld(World.OVERWORLD);
+
+        int online = server.getPlayerManager().getPlayerList().size();
+        context.append("online_players: ").append(online).append('\n');
+
+        // overworld snapshot
+        var overworld = server.getWorld(World.OVERWORLD);
         if (overworld != null) {
             long timeOfDay = overworld.getTimeOfDay() % 24000;
             String timeDesc = getTimeDescription(timeOfDay);
-            context.append("主世界时间: ").append(timeDesc).append("\n");
-            
+            context.append("overworld_time: ").append(timeDesc).append('\n');
+
             boolean isRaining = overworld.isRaining();
             boolean isThundering = overworld.isThundering();
-            String weather = isThundering ? "雷雨" : (isRaining ? "下雨" : "晴朗");
-            context.append("天气: ").append(weather).append("\n");
+            String weather = isThundering ? "thunder" : (isRaining ? "rain" : "clear");
+            context.append("weather: ").append(weather).append('\n');
         }
-        
-        // 玩家分布信息
+
+        // player distribution by dimension
         long playersInOverworld = server.getPlayerManager().getPlayerList().stream()
             .filter(p -> p.getWorld().getRegistryKey() == World.OVERWORLD)
             .count();
@@ -219,83 +239,61 @@ public class IntelligentAutoMessageSystem {
         long playersInEnd = server.getPlayerManager().getPlayerList().stream()
             .filter(p -> p.getWorld().getRegistryKey() == World.END)
             .count();
-            
-        context.append(String.format("玩家分布 - 主世界:%d, 下界:%d, 末地:%d", 
+
+        context.append(String.format("distribution: overworld=%d, nether=%d, end=%d",
             playersInOverworld, playersInNether, playersInEnd));
-        
+
         return context.toString();
     }
-    
-    /**
-     * 收集玩家上下文信息
-     */
-    private static String gatherPlayerContext(ServerPlayerEntity player) {
-        StringBuilder context = new StringBuilder();
-        
-        // 基本信息
-        BlockPos pos = player.getBlockPos();
-        String worldName = getWorldDisplayName(player.getWorld());
-        context.append(String.format("位置: (%d, %d, %d) 在%s\n", 
-            pos.getX(), pos.getY(), pos.getZ(), worldName));
-        
-        // 健康状态
-        int health = (int) player.getHealth();
-        int hunger = player.getHungerManager().getFoodLevel();
-        context.append(String.format("生命值: %d/20, 饥饿值: %d/20\n", health, hunger));
-        
-        // Y轴位置分析
-        if (pos.getY() < 0) {
-            context.append("处于地下深层（基岩层附近）\n");
-        } else if (pos.getY() < 32) {
-            context.append("处于地下（挖矿层）\n");
-        } else if (pos.getY() > 100) {
-            context.append("处于高空（山顶或建筑）\n");
-        } else {
-            context.append("处于地表\n");
-        }
-        
-        // 生物群系（如果可获取）
-        try {
-            var biome = player.getWorld().getBiome(pos);
-            context.append("生物群系: ").append(biome.getKey().map(k -> k.getValue().getPath()).orElse("未知")).append("\n");
-        } catch (Exception ignored) {}
-        
-        // 经验等级
-        context.append("经验等级: ").append(player.experienceLevel);
-        
-        return context.toString();
-    }
-    
+
+
+
     private static String getTimeDescription(long timeOfDay) {
-        if (timeOfDay < 1000) return "凌晨";
-        if (timeOfDay < 6000) return "上午";
-        if (timeOfDay < 12000) return "下午";
-        if (timeOfDay < 18000) return "傍晚";
-        return "夜晚";
+        if (timeOfDay < 1000) return "dawn";
+        if (timeOfDay < 6000) return "morning";
+        if (timeOfDay < 12000) return "afternoon";
+        if (timeOfDay < 18000) return "evening";
+        return "night";
     }
-    
-    private static String getWorldDisplayName(ServerWorld world) {
-        if (world.getRegistryKey() == World.OVERWORLD) return "主世界";
-        if (world.getRegistryKey() == World.NETHER) return "下界";
-        if (world.getRegistryKey() == World.END) return "末地";
-        return world.getRegistryKey().getValue().toString();
+
+
+    private static String majorityLocaleCode() {
+        Map<String, Integer> counts = new HashMap<>();
+        server.getPlayerManager().getPlayerList().forEach(p -> {
+            String code = PlayerLanguageCache.code(p);
+            counts.merge(code, 1, Integer::sum);
+        });
+        String best = "en_us";
+        int bestCount = 0;
+        for (var e : counts.entrySet()) {
+            if (e.getValue() > bestCount) {
+                best = e.getKey();
+                bestCount = e.getValue();
+            }
+        }
+        return best;
     }
-    
-    // 命令工具：管理员控制系统
-    // 管理员控制方法：启用或禁用全服自动消息系统
-    public static void toggleAutoMessages(boolean enabled) {
-        systemEnabled = enabled;
+
+    private static String preview(String s) {
+        if (s == null) return "";
+        s = s.replace('\n', ' ');
+        return s.substring(0, Math.min(160, s.length()));
     }
-    
-    // 管理员控制方法：为特定玩家启用或禁用个性化自动消息
+
+    // ---- Admin API ----
+
+    /** Enable/disable the entire intelligent auto message system. */
+    public static void toggleSystem(boolean enabled) { systemEnabled = enabled; }
+
+    /** Back-compat: alias of toggleSystem. */
+    public static void toggleAutoMessages(boolean enabled) { toggleSystem(enabled); }
+
+    /** Per-player personalized tips opt-out (enabled=false means opt-out). */
     public static void togglePlayerAutoMessages(String playerName, boolean enabled) {
         playerOptOut.put(playerName, !enabled);
     }
-    
-    /**
-     * 检查系统是否启用
-     */
-    public static boolean isSystemEnabled() {
-        return systemEnabled;
-    }
+
+    /** System on/off status. */
+    public static boolean isSystemEnabled() { return systemEnabled; }
 }
+

@@ -72,5 +72,29 @@
   "tool.time.day": "白天",
   "tool.time.noon": "正午",
   "tool.time.night": "夜晚",
-  "tool.time.midnight": "午夜"
+  "tool.time.midnight": "午夜",
+
+  "aim.stats.title": "§b[Ausuka.ai] §f使用统计",
+  "aim.stats.messages": "总消息数：%d",
+  "aim.stats.players": "参与玩家数：%d",
+  "aim.stats.sessions": "创建的会话数：%d",
+  "aim.stats.inchat": "当前处于AI聊天的玩家：%d",
+  "aim.stats.footer": "§7使用 /ai admin 获取更多控制。",
+
+  "admin.kick.disconnect": "§c[系统] 你已被踢出：%s",
+  "admin.kick.broadcast": "§e[管理] §c%s §e被 §a%s §e踢出服务器 - %s",
+  "admin.ban.disconnect": "§c[系统] 你已被封禁：%s",
+  "admin.ban.broadcast": "§e[管理] §c%s §e被 §a%s §e永久封禁 - %s",
+  "admin.freeze.frozen": "§c[系统] 你已被管理员冻结。",
+  "admin.freeze.unfrozen": "§a[系统] 你已被解除冻结。",
+  "admin.teleport.to_player": "§e[管理] 你被传送到了 %s 身边",
+  "admin.teleport.to_coords": "§e[管理] 你被传送到了坐标 (%s, %s, %s)",
+  "admin.jail.jailed": "§c[系统] 你已被监禁。",
+  "admin.jail.released": "§a[系统] 你已被释放。"
+,
+  "tool.heal.done": "§b[Ausuka.ai] §f你已被完全治疗（生命与饥饿）。",
+  "tool.effect.applied": "§b[Ausuka.ai] §f效果 %s 已应用（等级 %d，%s 秒）",
+  "tool.effect.cleared.all": "§b[Ausuka.ai] §f已移除 %s 个状态效果。",
+  "tool.effect.cleared.negative": "§b[Ausuka.ai] §f已移除 %s 个负面效果。",
+  "tool.effect.cleared.specific": "§b[Ausuka.ai] §f已移除 %s 个指定效果。"
 }

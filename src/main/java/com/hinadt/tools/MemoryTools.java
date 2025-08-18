@@ -3,13 +3,14 @@ package com.hinadt.tools;
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.observability.RequestContext;
+import com.hinadt.util.MainThread;
+import com.google.gson.JsonObject;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -50,54 +51,42 @@ public class MemoryTools {
     ) {
         AusukaAiMod.LOGGER.debug("{} [tool:save_location] params player='{}' name='{}' desc='{}'",
                 RequestContext.midTag(), playerName, locationName, description);
+        long startNanos = System.nanoTime();
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerName);
         if (player == null) {
             return "❌ Player not found: " + playerName;
         }
-        
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicReference<String> result = new AtomicReference<>();
-        
-        server.execute(() -> {
+        final AtomicReference<String> result = new AtomicReference<>();
+        MainThread.runSync(server, () -> {
             try {
                 BlockPos pos = player.getBlockPos();
                 String worldName = player.getWorld().getRegistryKey().getValue().toString();
-                
-                // Auto-generate a description if none is provided
-                String finalDescription = description != null && !description.trim().isEmpty()
+
+                String finalDescription = (description != null && !description.trim().isEmpty())
                         ? description
                         : "Saved position in world " + worldName;
-                
+
                 AiRuntime.getConversationMemory().saveLocation(
-                    playerName, 
-                    locationName, 
-                    worldName, 
-                    pos.getX(), 
-                    pos.getY(), 
-                    pos.getZ(), 
-                    finalDescription
+                        playerName,
+                        locationName,
+                        worldName,
+                        pos.getX(),
+                        pos.getY(),
+                        pos.getZ(),
+                        finalDescription
                 );
-                
+
                 result.set(String.format("✅ Saved location memory: %s → %s (%d, %d, %d) in %s",
                         locationName, finalDescription, pos.getX(), pos.getY(), pos.getZ(), worldName));
-                AusukaAiMod.LOGGER.debug("{} [tool:save_location] saved name='{}' world='{}' pos=({},{},{})",
-                        RequestContext.midTag(), locationName, worldName, pos.getX(), pos.getY(), pos.getZ());
-                
+                AusukaAiMod.LOGGER.info("{} [tool:save_location] done name='{}' world='{}' pos=({},{},{}) cost={}ms",
+                        RequestContext.midTag(), locationName, worldName, pos.getX(), pos.getY(), pos.getZ(),
+                        (System.nanoTime() - startNanos)/1_000_000L);
+
             } catch (Exception e) {
                 AusukaAiMod.LOGGER.error("Failed to save location memory", e);
                 result.set("❌ Error while saving location memory: " + e.getMessage());
-            } finally {
-                latch.countDown();
             }
         });
-        
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return "❌ Save location memory operation was interrupted";
-        }
-        
         return result.get();
     }
     
@@ -116,6 +105,7 @@ public class MemoryTools {
         @ToolParam(description = "Player name") String playerName,
         @ToolParam(description = "Location name or keyword") String locationName
     ) {
+        long startNanos = System.nanoTime();
         try {
             AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] params player='{}' name='{}'",
                     RequestContext.midTag(), playerName, locationName);
@@ -132,7 +122,8 @@ public class MemoryTools {
                 "Coords: (%.1f, %.1f, %.1f)\n" +
                 "Description: %s",
                     location.locationName(), location.world(), location.x(), location.y(), location.z(), location.description());
-            AusukaAiMod.LOGGER.debug("{} [tool:get_saved_location] hit name='{}' world='{}'", RequestContext.midTag(), location.locationName(), location.world());
+            AusukaAiMod.LOGGER.info("{} [tool:get_saved_location] hit name='{}' world='{}' cost={}ms",
+                    RequestContext.midTag(), location.locationName(), location.world(), (System.nanoTime()-startNanos)/1_000_000L);
             return out;
                 
         } catch (Exception e) {
@@ -154,6 +145,7 @@ public class MemoryTools {
     public String listSavedLocations(
         @ToolParam(description = "Player name to list locations for") String playerName
     ) {
+        long startNanos = System.nanoTime();
         try {
             AusukaAiMod.LOGGER.debug("{} [tool:list_saved_locations] params player='{}'",
                     RequestContext.midTag(), playerName);
@@ -176,8 +168,8 @@ public class MemoryTools {
                 result.append(String.format("   Description: %s\n\n", loc.description()));
             }
             
-            AusukaAiMod.LOGGER.debug("{} [tool:list_saved_locations] return size={}",
-                    RequestContext.midTag(), locations.size());
+            AusukaAiMod.LOGGER.info("{} [tool:list_saved_locations] return size={} cost={}ms",
+                    RequestContext.midTag(), locations.size(), (System.nanoTime()-startNanos)/1_000_000L);
             return result.toString();
             
         } catch (Exception e) {
@@ -200,14 +192,15 @@ public class MemoryTools {
         @ToolParam(description = "Player name") String playerName,
         @ToolParam(description = "Location name to delete") String locationName
     ) {
+        long startNanos = System.nanoTime();
         try {
             AusukaAiMod.LOGGER.debug("{} [tool:delete_saved_location] params player='{}' name='{}'",
                     RequestContext.midTag(), playerName, locationName);
             boolean deleted = AiRuntime.getConversationMemory().deleteLocation(playerName, locationName);
             
             if (deleted) {
-                AusukaAiMod.LOGGER.debug("{} [tool:delete_saved_location] deleted name='{}'",
-                        RequestContext.midTag(), locationName);
+                AusukaAiMod.LOGGER.info("{} [tool:delete_saved_location] deleted name='{}' cost={}ms",
+                        RequestContext.midTag(), locationName, (System.nanoTime()-startNanos)/1_000_000L);
                 return String.format("✅ Deleted location memory: %s", locationName);
             } else {
                 return String.format("❌ No location memory found to delete: %s", locationName);
@@ -216,6 +209,68 @@ public class MemoryTools {
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("Failed to delete location memory", e);
             return "❌ Error deleting location memory: " + e.getMessage();
+        }
+    }
+    
+    @Tool(
+        name = "find_location",
+        description = """
+        Find a saved location and return a structured JSON result for tool chaining.
+
+        INPUT
+          playerName (string): whose memory to search
+          locationName (string): name or keyword
+
+        OUTPUT (JSON)
+          {
+            "ok": true/false,
+            "code": "OK" | "NOT_FOUND" | "ERROR",
+            "message": "<short explanation>",
+            "name": "<location name>",
+            "world": "<dimension id>",
+            "x": <number>,
+            "y": <number>,
+            "z": <number>,
+            "description": "<text>"
+          }
+        """
+    )
+    public String findLocation(
+        @ToolParam(description = "Player name to search") String playerName,
+        @ToolParam(description = "Location name or keyword") String locationName
+    ) {
+        long startNanos = System.nanoTime();
+        try {
+            AusukaAiMod.LOGGER.debug("{} [tool:find_location] params player='{}' name='{}'",
+                    RequestContext.midTag(), playerName, locationName);
+            var loc = AiRuntime.getConversationMemory().getLocationForTeleport(playerName, locationName);
+            if (loc == null) {
+                JsonObject root = new JsonObject();
+                root.addProperty("ok", false);
+                root.addProperty("code", "NOT_FOUND");
+                root.addProperty("message", "No location found");
+                return root.toString();
+            }
+            AusukaAiMod.LOGGER.info("{} [tool:find_location] hit name='{}' world='{}' cost={}ms",
+                    RequestContext.midTag(), loc.locationName(), loc.world(), (System.nanoTime()-startNanos)/1_000_000L);
+            JsonObject root = new JsonObject();
+            root.addProperty("ok", true);
+            root.addProperty("code", "OK");
+            root.addProperty("message","");
+            root.addProperty("name", loc.locationName());
+            root.addProperty("world", loc.world());
+            root.addProperty("x", loc.x());
+            root.addProperty("y", loc.y());
+            root.addProperty("z", loc.z());
+            root.addProperty("description", loc.description());
+            return root.toString();
+        } catch (Exception e) {
+            AusukaAiMod.LOGGER.error("Failed to find location", e);
+            JsonObject root = new JsonObject();
+            root.addProperty("ok", false);
+            root.addProperty("code", "ERROR");
+            root.addProperty("message", "Exception");
+            return root.toString();
         }
     }
 }

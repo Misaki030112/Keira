@@ -3,6 +3,7 @@
 2. When you are modifying existing code, if you find that some code is not elegant, unreasonable, or does not meet the reusability requirements, you should be responsible for refactoring them instead of adapting to them.
 3. Do not use fully qualified class names, etc., and use the most elegant way
 4. When you write code, comments should be in English
+5. Logs should be hierarchical. Debug logs are used to track processes. Info level and above logs are used to prompt users with important information. Do not abuse info level and above logs.
 
 
 

@@ -78,6 +78,7 @@ public final class AdminAutoMsgCommands {
         return 1;
     }
 
+    @SuppressWarnings("resource")
     public static int status(CommandContext<ServerCommandSource> ctx) {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
@@ -128,7 +129,7 @@ public final class AdminAutoMsgCommands {
             Messages.to(player, Text.translatable("aim.stats.footer"));
             return 1;
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.error("统计信息查询失败", e);
+            AusukaAiMod.LOGGER.error("Statistics query failed", e);
             Messages.to(player, Text.translatable("aim.say.error"));
             return 0;
         }

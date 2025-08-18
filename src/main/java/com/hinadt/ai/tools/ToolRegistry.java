@@ -14,6 +14,7 @@ public class ToolRegistry {
     public final PlayerStatsTools playerStatsTools;
     public final WorldAnalysisTools worldAnalysisTools;
     public final MemoryTools memoryTools;
+    public final StatusEffectTools statusEffectTools;
     public final AdminTools adminTools;
 
     public ToolRegistry(MinecraftServer server) {
@@ -25,6 +26,7 @@ public class ToolRegistry {
         this.playerStatsTools = new PlayerStatsTools(server);
         this.worldAnalysisTools = new WorldAnalysisTools(server);
         this.memoryTools = new MemoryTools(server);
+        this.statusEffectTools = new StatusEffectTools(server);
 
         AiRuntime.initModAdminSystem(server);
         this.adminTools = new AdminTools(server, AiRuntime.getModAdminSystem());

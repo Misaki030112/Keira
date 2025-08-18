@@ -4,11 +4,17 @@ import com.hinadt.AusukaAiMod;
 import com.hinadt.observability.LoggingContextPropagation;
 import com.hinadt.persistence.MyBatisSupport;
 import net.minecraft.server.MinecraftServer;
+import org.springframework.ai.anthropic.AnthropicChatModel;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
+import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.deepseek.api.DeepSeekApi;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,21 +34,25 @@ public final class AiRuntime {
      * Supported AI provider types
      */
     public enum AiProvider {
-        DEEPSEEK("deepseek", "DEEPSEEK_API_KEY"),
-        OPENAI("openai", "OPENAI_API_KEY"),
-        CLAUDE("claude", "CLAUDE_API_KEY"),
-        CUSTOM("custom", "CUSTOM_API_KEY");
-        
+        DEEPSEEK("deepseek", new String[]{"DEEPSEEK_API_KEY"}),
+        OPENAI("openai", new String[]{"OPENAI_API_KEY"}),
+        // Claude is provided by Anthropic; support both common env names
+        CLAUDE("claude", new String[]{"CLAUDE_API_KEY", "ANTHROPIC_API_KEY"})
+
+        ;
+
         private final String name;
-        private final String envKeyName;
-        
-        AiProvider(String name, String envKeyName) {
+        private final String[] envKeyNames;
+
+        AiProvider(String name, String[] envKeyNames) {
             this.name = name;
-            this.envKeyName = envKeyName;
+            this.envKeyNames = envKeyNames;
         }
-        
+
         public String getName() { return name; }
-        public String getEnvKeyName() { return envKeyName; }
+        public String[] getEnvKeyNames() { return envKeyNames; }
+        /** First env key (for backward compatibility) */
+        public String getEnvKeyName() { return envKeyNames[0]; }
     }
 
     public static void init() {
@@ -104,10 +114,12 @@ public final class AiRuntime {
 
         // Check in priority order
         for (AiProvider provider : AiProvider.values()) {
-            String apiKey = AiConfig.get(provider.getEnvKeyName());
-            if (apiKey != null && !apiKey.trim().isEmpty()) {
-                AusukaAiMod.LOGGER.info("Detected {} API key; using this provider", provider.getName());
-                return provider;
+            for (String k : provider.getEnvKeyNames()) {
+                String apiKey = AiConfig.get(k);
+                if (apiKey != null && !apiKey.trim().isEmpty()) {
+                    AusukaAiMod.LOGGER.info("Detected {} API key ({}); using this provider", provider.getName(), k);
+                    return provider;
+                }
             }
         }
 
@@ -119,7 +131,11 @@ public final class AiRuntime {
      * Create ChatModel based on provider type
      */
     private static ChatModel createChatModel(AiProvider provider) {
-        String apiKey = AiConfig.get(provider.getEnvKeyName());
+        String apiKey = null;
+        for (String k : provider.getEnvKeyNames()) {
+            apiKey = AiConfig.get(k);
+            if (apiKey != null && !apiKey.isBlank()) break;
+        }
 
         if (apiKey == null || apiKey.trim().isEmpty()) {
             AusukaAiMod.LOGGER.warn("API key for provider {} is not set", provider.getName());
@@ -132,16 +148,10 @@ public final class AiRuntime {
                     return createDeepSeekModel(apiKey);
                     
                 case OPENAI:
-                    // TODO: add OpenAI support
-                    // return createOpenAiModel(apiKey);
-                    AusukaAiMod.LOGGER.warn("OpenAI support not implemented yet; falling back to DeepSeek");
-                    return createDeepSeekModel(AiConfig.get("DEEPSEEK_API_KEY"));
+                    return createOpenAiModel(apiKey);
                     
                 case CLAUDE:
-                    // TODO: add Claude support
-                    // return createClaudeModel(apiKey);
-                    AusukaAiMod.LOGGER.warn("Claude support not implemented yet; falling back to DeepSeek");
-                    return createDeepSeekModel(AiConfig.get("DEEPSEEK_API_KEY"));
+                    return createClaudeModel(apiKey);
                     
                 default:
                     AusukaAiMod.LOGGER.warn("Unknown AI provider: {}", provider.getName());
@@ -157,11 +167,16 @@ public final class AiRuntime {
      * Create DeepSeek model instance
      */
     private static ChatModel createDeepSeekModel(String apiKey) {
-        var api = DeepSeekApi.builder().apiKey(apiKey).build();
+        String baseUrl = AiConfig.get("DEEPSEEK_BASE_URL");
+        String modelName = defaultIfBlank(AiConfig.get("DEEPSEEK_MODEL"), "deepseek-chat");
+
+        var builder = DeepSeekApi.builder().apiKey(apiKey);
+        if (baseUrl != null && !baseUrl.isBlank()) builder.baseUrl(baseUrl);
+        var api = builder.build();
 
         var options = DeepSeekChatOptions.builder()
-                .model("deepseek-chat")
-                .temperature(0.7)  // add some creativity
+                .model(modelName)
+                .temperature(0.7)
                 .build();
 
         return DeepSeekChatModel.builder()
@@ -169,19 +184,51 @@ public final class AiRuntime {
                 .defaultOptions(options)
                 .build();
     }
-    
-    // TODO: implement other AI providers
-    /*
+
+    /** Create OpenAI model instance */
     private static ChatModel createOpenAiModel(String apiKey) {
-        // OpenAI implementation when spring-ai-openai is available
-        throw new UnsupportedOperationException("OpenAI support under development");
+        String baseUrl = AiConfig.get("OPENAI_BASE_URL");
+        String modelName = defaultIfBlank(AiConfig.get("OPENAI_MODEL"), "gpt-4o-mini");
+
+        var builder = OpenAiApi.builder().apiKey(apiKey);
+        if (baseUrl != null && !baseUrl.isBlank()) builder.baseUrl(baseUrl);
+        var api = builder.build();
+
+        var options = OpenAiChatOptions.builder()
+                .model(modelName)
+                .temperature(0.7)
+                .build();
+
+        return OpenAiChatModel.builder()
+                .openAiApi(api)
+                .defaultOptions(options)
+                .build();
     }
-    
+
+    /** Create Claude (Anthropic) model instance */
     private static ChatModel createClaudeModel(String apiKey) {
-        // Claude implementation when spring-ai-claude is available  
-        throw new UnsupportedOperationException("Claude support under development");
+        String baseUrl = AiConfig.get("CLAUDE_BASE_URL");
+        if (baseUrl == null || baseUrl.isBlank()) baseUrl = AiConfig.get("ANTHROPIC_BASE_URL");
+        String modelName = defaultIfBlank(AiConfig.get("CLAUDE_MODEL"), "claude-3-haiku-20240307");
+
+        var builder = AnthropicApi.builder().apiKey(apiKey);
+        if (baseUrl != null && !baseUrl.isBlank()) builder.baseUrl(baseUrl);
+        var api = builder.build();
+
+        var options = AnthropicChatOptions.builder()
+                .model(modelName)
+                .temperature(0.7)
+                .build();
+
+        return AnthropicChatModel.builder()
+                .anthropicApi(api)
+                .defaultOptions(options)
+                .build();
     }
-    */
+
+    private static String defaultIfBlank(String v, String def) {
+        return (v == null || v.isBlank()) ? def : v;
+    }
     
     /**
      * Get conversation memory system

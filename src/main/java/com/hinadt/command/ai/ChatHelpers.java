@@ -10,6 +10,7 @@ import com.hinadt.util.Messages;
 
 import java.util.concurrent.CompletableFuture;
 
+@SuppressWarnings("resource")
 public final class ChatHelpers {
     private ChatHelpers() {}
 
@@ -91,7 +92,7 @@ public final class ChatHelpers {
                 AiServices.server().execute(() -> Messages.to(player, Text.translatable("ausuka.ai.reply", welcome)));
 
             } catch (Exception e) {
-                AusukaAiMod.LOGGER.error("生成AI欢迎消息时出错", e);
+                AusukaAiMod.LOGGER.error("Error generating AI welcome message", e);
                 AiServices.server().execute(() -> Messages.to(player, Text.translatable("aim.chat.welcome.fallback", player.getName().getString())));
             }
         });

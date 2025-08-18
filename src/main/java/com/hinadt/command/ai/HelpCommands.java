@@ -27,7 +27,7 @@ public final class HelpCommands {
     public static void sendHelp(ServerPlayerEntity player) {
         ModAdminSystem.PermissionLevel perm = Permissions.getPlayerPermission(player);
 
-        // 主命令帮助（国际化）
+        // Main command help (internationalization)
         Messages.to(player, Text.translatable("aim.help.header"));
         Messages.to(player, Text.translatable("aim.help.cmd.help"));
         Messages.to(player, Text.translatable("aim.help.cmd.status"));
@@ -58,7 +58,4 @@ public final class HelpCommands {
         Messages.to(player, Text.translatable("aim.help.tips.line2"));
     }
 
-    private static void sendMultiline(ServerPlayerEntity player, String text) {
-        for (String line : text.split("\n")) Messages.to(player, Text.translatable(line));
-    }
 }

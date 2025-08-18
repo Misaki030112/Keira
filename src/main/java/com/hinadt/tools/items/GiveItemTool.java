@@ -15,14 +15,15 @@ import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
+import com.hinadt.util.MainThread;
+import com.hinadt.AusukaAiMod;
+import com.hinadt.observability.RequestContext;
 
 
 public class GiveItemTool {
@@ -90,31 +91,43 @@ public class GiveItemTool {
             @ToolParam(description = "Exact item id, e.g., 'minecraft:diamond_sword'") String item,
             @ToolParam(description = "Item count (default 1, clamped to [1..1024])") Integer count
     ) {
+        long startNanos = System.nanoTime();
+        AusukaAiMod.LOGGER.debug("{} [tool:give_item] params target='{}' item='{}' count={}",
+                RequestContext.midTag(), target, item, count);
         final int requested = clamp((count == null) ? 1 : count, 1, 1024);
 
         // --- Parse and resolve item id ---
         final Identifier id = Identifier.tryParse(item);
         if (id == null) {
-            return new GiveItemResult(false, "ERR_INVALID_ITEM_ID",
+            GiveItemResult r = new GiveItemResult(false, "ERR_INVALID_ITEM_ID",
                     "Item id must be 'namespace:path'.", null, null, item, requested, 0, 0, 0);
+            AusukaAiMod.LOGGER.warn("{} [tool:give_item] result code={} msg='{}'",
+                    RequestContext.midTag(), r.code, r.message);
+            return r;
         }
         final Item mcItem = Registries.ITEM.get(id);
         if (mcItem == Items.AIR) {
-            return new GiveItemResult(false, "ERR_ITEM_NOT_FOUND",
+            GiveItemResult r = new GiveItemResult(false, "ERR_ITEM_NOT_FOUND",
                     "Item not found in registry.", null, null, item, requested, 0, 0, 0);
+            AusukaAiMod.LOGGER.warn("{} [tool:give_item] result code={} msg='{}'",
+                    RequestContext.midTag(), r.code, r.message);
+            return r;
         }
         final int maxPerStack = mcItem.getMaxCount(); // light-weight, no ItemStack allocation
 
         // --- Resolve online player by name or UUID ---
         final ServerPlayerEntity player = findOnlinePlayer(target);
         if (player == null) {
-            return new GiveItemResult(false, "ERR_PLAYER_OFFLINE",
+            GiveItemResult r = new GiveItemResult(false, "ERR_PLAYER_OFFLINE",
                     "Target player is not online.", null, null, item, requested, 0, 0, maxPerStack);
+            AusukaAiMod.LOGGER.warn("{} [tool:give_item] result code={} msg='{}'",
+                    RequestContext.midTag(), r.code, r.message);
+            return r;
         }
 
         // --- Execute on main thread and wait for completion ---
         final AtomicReference<GiveItemResult> ref = new AtomicReference<>();
-        runOnMainAndWait(() -> {
+        MainThread.runSync(server, () -> {
             int remaining = requested;
             int given = 0;
             int dropped = 0;
@@ -152,8 +165,12 @@ public class GiveItemTool {
                     id.toString(),
                     requested, given, dropped, maxPerStack));
         });
-
-        return ref.get();
+        
+        GiveItemResult res = ref.get();
+        long costMs = (System.nanoTime() - startNanos) / 1_000_000L;
+        AusukaAiMod.LOGGER.info("{} [tool:give_item] done code={} given={} dropped={} cost={}ms",
+                RequestContext.midTag(), res.code, res.given, res.dropped, costMs);
+        return res;
     }
 
     // ----------------------------- Utilities -----------------------------
@@ -176,22 +193,4 @@ public class GiveItemTool {
             return null;
         }
     }
-
-    /** Ensure the runnable runs on the server main thread; block until completion. */
-    private void runOnMainAndWait(Runnable task) {
-        if (server == null) { task.run(); return; }
-
-        if (server.isOnThread()) { // already on main thread
-            task.run();
-            return;
-        }
-        CountDownLatch latch = new CountDownLatch(1);
-        server.execute(() -> { try { task.run(); } finally { latch.countDown(); } });
-        try {
-            latch.await();
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
 }

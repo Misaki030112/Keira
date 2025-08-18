@@ -3,6 +3,7 @@ package com.hinadt.persistence;
 import com.hinadt.AusukaAiMod;
 import com.hinadt.persistence.mapper.PlayerConnectionMapper;
 import com.hinadt.persistence.mapper.PlayerProfileMapper;
+import com.hinadt.util.PlayerLocales;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.server.network.ConnectedClientData;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -11,9 +12,13 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
 /**
- * 玩家连接观测记录器
- * - 记录每次加入的语言(locale)、IP等信息
- * - 聚合更新 player_profiles，并新增一条 player_connections 历史
+ * Player telemetry recorder.
+ * - Records language (locale) and IP when a player joins.
+ * - Upserts player_profiles and appends a record in player_connections.
+ *
+ * Notes on locale resolution:
+ * - Do not reflectively probe ConnectedClientData. Use PlayerLocales.code(player)
+ *   which centralizes compatibility and defaults to en_us.
  */
 public final class PlayerTelemetryRecorder {
     private PlayerTelemetryRecorder() {}
@@ -23,7 +28,7 @@ public final class PlayerTelemetryRecorder {
             String uuid = player.getUuidAsString();
             String name = player.getGameProfile().getName();
             String ip = extractIp(connection);
-            String locale = extractLocale(clientData);
+            String locale = extractLocale(player);
 
             var profileMapper = session.getMapper(PlayerProfileMapper.class);
             int updated = profileMapper.touchProfile(uuid, name, ip, locale);
@@ -34,9 +39,9 @@ public final class PlayerTelemetryRecorder {
             var connMapper = session.getMapper(PlayerConnectionMapper.class);
             connMapper.insertConnection(uuid, name, ip, locale);
 
-            AusukaAiMod.LOGGER.debug("玩家加入记录完成: uuid={}, name={}, ip={}, locale={}", uuid, name, ip, locale);
+            AusukaAiMod.LOGGER.debug("Recorded player join: uuid={}, name={}, ip={}, locale={}", uuid, name, ip, locale);
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.warn("记录玩家加入信息失败: " + e.getMessage(), e);
+            AusukaAiMod.LOGGER.warn("Failed to record player join: " + e.getMessage(), e);
         }
     }
 
@@ -53,36 +58,11 @@ public final class PlayerTelemetryRecorder {
         }
     }
 
-    private static String extractLocale(ConnectedClientData clientData) {
-        // 兼容不同版本字段/方法命名，使用反射尽力获取
+    private static String extractLocale(ServerPlayerEntity player) {
         try {
-            // 直接在 clientData 上查找 language()
-            var langMethod = clientData.getClass().getMethod("language");
-            Object v = langMethod.invoke(clientData);
-            if (v instanceof String s && !s.isEmpty()) return s;
-        } catch (Throwable ignore) {}
-
-        // 尝试通过嵌套的 client information 对象获取
-        String[] infoMethodCandidates = new String[]{
-                "clientInfo", "clientInformation", "getClientInformation", "getClientSettings", "settings"
-        };
-        for (String mName : infoMethodCandidates) {
-            try {
-                var m = clientData.getClass().getMethod(mName);
-                Object info = m.invoke(clientData);
-                if (info == null) continue;
-                try {
-                    var lm = info.getClass().getMethod("language");
-                    Object lv = lm.invoke(info);
-                    if (lv instanceof String s && !s.isEmpty()) return s;
-                } catch (Throwable ignore) {}
-                try {
-                    var lm = info.getClass().getMethod("getLanguage");
-                    Object lv = lm.invoke(info);
-                    if (lv instanceof String s && !s.isEmpty()) return s;
-                } catch (Throwable ignore) {}
-            } catch (Throwable ignore) {}
+            return PlayerLocales.code(player);
+        } catch (Exception e) {
+            return PlayerLocales.serverCode();
         }
-        return "unknown";
     }
 }

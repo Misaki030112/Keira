@@ -52,7 +52,7 @@ public final class Messages {
      */
     public static void broadcast(MinecraftServer server, Text text) {
         try {
-            server.getPlayerManager().broadcast(text, false);
+            server.getPlayerManager().broadcast(text, true);
         } catch (Throwable t) {
             // no-op fallback
         }

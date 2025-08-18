@@ -18,18 +18,18 @@ public class PlayerLeaveMixin {
     private void onPlayerLeave(ServerPlayerEntity player, CallbackInfo ci) {
         try {
             String playerName = player.getName().getString();
-            // 清理AI聊天状态（内存态）
+            //Clear AI chat status (memory state)
             if (AiServices.sessions().isInChat(playerName)) {
                 AiServices.sessions().exit(playerName);
-                AusukaAiMod.LOGGER.info("已清理玩家 {} 的AI聊天会话状态", playerName);
+                AusukaAiMod.LOGGER.info("Cleaned up AI chat session state for player {}", playerName);
             }
-            // 清理对话记忆系统中的会话缓存
+            //Clear the session cache in the conversation memory system
             AiRuntime.getConversationMemory().clearSession(playerName);
 
-            // 移除语言缓存
+            // Remove the language cache
             PlayerLanguageCache.remove(player);
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.warn("玩家下线清理会话状态失败: " + e.getMessage());
+            AusukaAiMod.LOGGER.warn("Player offline clearing session status failed: " + e.getMessage());
         }
     }
 }

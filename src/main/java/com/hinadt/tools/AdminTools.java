@@ -3,11 +3,18 @@ package com.hinadt.tools;
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.ModAdminSystem;
 import com.hinadt.observability.RequestContext;
+import com.hinadt.util.MainThread;
+import com.hinadt.util.Messages;
+import net.minecraft.registry.RegistryKey;
+import com.hinadt.ai.AiRuntime;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -16,400 +23,265 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 管理员权限验证和管理工具
- * 提供全面的服务器管理功能，包括踢人、封禁、定身、强制传送等
+ * Admin tools with auditing and thread safety.
+ * - English logs/comments; server language en_us.
+ * - All world/player mutations run on the main thread via MainThread.
  */
 public class AdminTools {
-    
+
     private final MinecraftServer server;
     private final ModAdminSystem modAdminSystem;
-    
-    // 冻结玩家状态存储
+
     private static final Map<String, Vec3d> frozenPlayers = new ConcurrentHashMap<>();
-    // 监禁玩家状态存储
     private static final Map<String, JailInfo> jailedPlayers = new ConcurrentHashMap<>();
-    
+
     public AdminTools(MinecraftServer server, ModAdminSystem modAdminSystem) {
         this.server = server;
         this.modAdminSystem = modAdminSystem;
     }
-    
-    /**
-     * 检查玩家是否为管理员
-     */
+
+    /** Check if a player is an administrator (OP or singleplayer host). */
     public static boolean isPlayerAdmin(MinecraftServer server, ServerPlayerEntity player) {
         if (player == null) return false;
-        
-        // 方法1：检查玩家是否是操作员（op）
         boolean isOp = server.getPlayerManager().isOperator(player.getGameProfile());
-        
-        // 方法2：单人游戏模式下，玩家默认拥有管理员权限
         boolean isSinglePlayer = !server.isDedicated();
-        
         return isOp || isSinglePlayer;
     }
-    
-    @Tool(
-        name = "kick_player",
-        description = """
-        踢出指定玩家，将其从服务器中移除。
-        只有管理员才能使用此功能。
-        
-        这是一个强制性操作，会立即断开玩家连接。
-        可以指定踢出原因，玩家会看到该原因。
-        """
-    )
+
+    // ---- Kick ----
+
+    @Tool(name = "kick_player",
+          description = "Kick a player from the server immediately. Admin only. Reason is shown to the player.")
     public String kickPlayer(
-        @ToolParam(description = "执行踢人操作的管理员名称") String adminName,
-        @ToolParam(description = "要踢出的玩家名称") String targetPlayerName,
-        @ToolParam(description = "踢出原因，可选") String reason
+            @ToolParam(description = "Admin name performing the action") String adminName,
+            @ToolParam(description = "Target player name") String targetPlayerName,
+            @ToolParam(description = "Reason (optional)") String reason
     ) {
-        AusukaAiMod.LOGGER.debug("{} [tool:kick_player] params admin='{}' target='{}' reason='{}'",
+        AusukaAiMod.LOGGER.debug("{} [tool:kick_player] admin='{}' target='{}' reason='{}'",
                 RequestContext.midTag(), adminName, targetPlayerName, reason);
-        // 权限验证
-        String permissionCheck = modAdminSystem.checkPermissionWithMessage(
-            adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "踢出玩家");
-        if (!"PERMISSION_GRANTED".equals(permissionCheck)) {
-            return permissionCheck;
-        }
-        
-        ServerPlayerEntity targetPlayer = server.getPlayerManager().getPlayer(targetPlayerName);
-        if (targetPlayer == null) {
-            return "❌ 找不到玩家：" + targetPlayerName;
-        }
-        
-        // 不能踢出管理员
-        if (isPlayerAdmin(server, targetPlayer)) {
-            return "❌ 不能踢出其他管理员";
-        }
-        
-        String kickReason = reason != null ? reason : "被管理员踢出服务器";
-        
-        try {
-            targetPlayer.networkHandler.disconnect(Text.of("§c[系统] " + kickReason));
-            
-            // 广播消息
-            String broadcastMsg = String.format("§e[管理] §c%s §e被 §a%s §e踢出服务器 - %s", 
-                targetPlayerName, adminName, kickReason);
-            server.getPlayerManager().broadcast(Text.of(broadcastMsg), false);
-            
-            return String.format("✅ 已踢出玩家 %s，原因：%s", targetPlayerName, kickReason);
-            
-        } catch (Exception e) {
-            return "❌ 踢出玩家时发生错误：" + e.getMessage();
-        }
+        String permission = modAdminSystem.checkPermissionWithMessage(adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "kick player");
+        if (!"PERMISSION_GRANTED".equals(permission)) return permission;
+
+        ServerPlayerEntity target = server.getPlayerManager().getPlayer(targetPlayerName);
+        if (target == null) return "❌ Player not found: " + targetPlayerName;
+        if (isPlayerAdmin(server, target)) return "❌ Cannot kick another admin.";
+
+        String msg = (reason == null || reason.isBlank()) ? "Kicked by admin" : reason;
+        MainThread.runSync(server, () -> target.networkHandler.disconnect(Text.translatable("admin.kick.disconnect", msg)));
+        Messages.broadcast(server, Text.translatable("admin.kick.broadcast", targetPlayerName, adminName, msg));
+        return String.format("✅ Kicked %s: %s", targetPlayerName, msg);
     }
-    
-    @Tool(
-        name = "ban_player",
-        description = """
-        封禁指定玩家，禁止其再次加入服务器。
-        只有管理员才能使用此功能。
-        
-        被封禁的玩家将无法重新加入服务器，直到被解除封禁。
-        可以指定封禁原因。
-        """
-    )
+
+    // ---- Ban ----
+
+    @Tool(name = "ban_player",
+          description = "Ban a player from rejoining. Admin only. If online, they are disconnected.")
     public String banPlayer(
-        @ToolParam(description = "执行封禁操作的管理员名称") String adminName,
-        @ToolParam(description = "要封禁的玩家名称") String targetPlayerName,
-        @ToolParam(description = "封禁原因，可选") String reason
+            @ToolParam(description = "Admin name performing the action") String adminName,
+            @ToolParam(description = "Target player name") String targetPlayerName,
+            @ToolParam(description = "Ban reason (optional)") String reason
     ) {
-        AusukaAiMod.LOGGER.debug("{} [tool:ban_player] params admin='{}' target='{}' reason='{}'",
+        AusukaAiMod.LOGGER.debug("{} [tool:ban_player] admin='{}' target='{}' reason='{}'",
                 RequestContext.midTag(), adminName, targetPlayerName, reason);
-        // 权限验证
-        String permissionCheck = modAdminSystem.checkPermissionWithMessage(
-            adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "封禁玩家");
-        if (!"PERMISSION_GRANTED".equals(permissionCheck)) {
-            return permissionCheck;
-        }
-        
-        ServerPlayerEntity targetPlayer = server.getPlayerManager().getPlayer(targetPlayerName);
-        
-        // 不能封禁管理员
-        if (targetPlayer != null && isPlayerAdmin(server, targetPlayer)) {
-            return "❌ 不能封禁其他管理员";
-        }
-        
-        String banReason = reason != null ? reason : "违反服务器规则";
-        
+        String permission = modAdminSystem.checkPermissionWithMessage(adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "ban player");
+        if (!"PERMISSION_GRANTED".equals(permission)) return permission;
+
+        ServerPlayerEntity target = server.getPlayerManager().getPlayer(targetPlayerName);
+        if (target != null && isPlayerAdmin(server, target)) return "❌ Cannot ban another admin.";
+
+        String msg = (reason == null || reason.isBlank()) ? "Violation of server rules" : reason;
         try {
-            // 执行封禁命令
             ServerCommandSource source = server.getCommandSource();
-            String command = String.format("ban %s %s", targetPlayerName, banReason);
+            String command = String.format("ban %s %s", targetPlayerName, msg);
             server.getCommandManager().executeWithPrefix(source, command);
-            
-            // 如果玩家在线，踢出
-            if (targetPlayer != null) {
-                targetPlayer.networkHandler.disconnect(Text.of("§c[系统] 你已被封禁：" + banReason));
+            if (target != null) {
+                MainThread.runSync(server, () -> target.networkHandler.disconnect(Text.translatable("admin.ban.disconnect", msg)));
             }
-            
-            // 广播消息
-            String broadcastMsg = String.format("§e[管理] §c%s §e被 §a%s §e永久封禁 - %s", 
-                targetPlayerName, adminName, banReason);
-            server.getPlayerManager().broadcast(Text.of(broadcastMsg), false);
-            
-            return String.format("✅ 已封禁玩家 %s，原因：%s", targetPlayerName, banReason);
-            
+            Messages.broadcast(server, Text.translatable("admin.ban.broadcast", targetPlayerName, adminName, msg));
+            return String.format("✅ Banned %s: %s", targetPlayerName, msg);
         } catch (Exception e) {
-            return "❌ 封禁玩家时发生错误：" + e.getMessage();
+            return "❌ Ban failed: " + e.getMessage();
         }
     }
-    
-    @Tool(
-        name = "freeze_player",
-        description = """
-        冻结指定玩家，使其无法移动。
-        只有管理员才能使用此功能。
-        
-        被冻结的玩家将无法移动，但可以聊天和观察。
-        这是一个临时性的限制措施。
-        """
-    )
+
+    // ---- Freeze ----
+
+    @Tool(name = "freeze_player",
+          description = "Freeze or unfreeze a player (cannot move). Admin only.")
     public String freezePlayer(
-        @ToolParam(description = "执行冻结操作的管理员名称") String adminName,
-        @ToolParam(description = "要冻结的玩家名称") String targetPlayerName,
-        @ToolParam(description = "是否冻结，true为冻结，false为解冻") boolean freeze
+            @ToolParam(description = "Admin name performing the action") String adminName,
+            @ToolParam(description = "Target player name") String targetPlayerName,
+            @ToolParam(description = "true=freeze, false=unfreeze") boolean freeze
     ) {
-        AusukaAiMod.LOGGER.debug("{} [tool:freeze_player] params admin='{}' target='{}' freeze={}",
+        AusukaAiMod.LOGGER.debug("{} [tool:freeze_player] admin='{}' target='{}' freeze={}",
                 RequestContext.midTag(), adminName, targetPlayerName, freeze);
-        // 权限验证
-        String permissionCheck = modAdminSystem.checkPermissionWithMessage(
-            adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "冻结/解冻玩家");
-        if (!"PERMISSION_GRANTED".equals(permissionCheck)) {
-            return permissionCheck;
-        }
-        
-        ServerPlayerEntity targetPlayer = server.getPlayerManager().getPlayer(targetPlayerName);
-        if (targetPlayer == null) {
-            return "❌ 找不到玩家：" + targetPlayerName;
-        }
-        
-        // 不能冻结管理员
-        if (isPlayerAdmin(server, targetPlayer)) {
-            return "❌ 不能冻结其他管理员";
-        }
-        
+        String permission = modAdminSystem.checkPermissionWithMessage(adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "freeze player");
+        if (!"PERMISSION_GRANTED".equals(permission)) return permission;
+
+        ServerPlayerEntity target = server.getPlayerManager().getPlayer(targetPlayerName);
+        if (target == null) return "❌ Player not found: " + targetPlayerName;
+        if (isPlayerAdmin(server, target)) return "❌ Cannot freeze another admin.";
+
         if (freeze) {
-            // 冻结玩家
-            Vec3d currentPos = targetPlayer.getPos();
-            frozenPlayers.put(targetPlayerName, currentPos);
-            
-            targetPlayer.sendMessage(Text.of("§c[系统] 你已被管理员冻结，无法移动"));
-            
-            return String.format("✅ 已冻结玩家 %s", targetPlayerName);
+            Vec3d pos = target.getPos();
+            frozenPlayers.put(targetPlayerName, pos);
+            MainThread.runSync(server, () -> Messages.to(target, Text.translatable("admin.freeze.frozen")));
+            return String.format("✅ Frozen %s", targetPlayerName);
         } else {
-            // 解冻玩家
             frozenPlayers.remove(targetPlayerName);
-            
-            targetPlayer.sendMessage(Text.of("§a[系统] 你已被解除冻结，可以正常移动"));
-            
-            return String.format("✅ 已解除冻结玩家 %s", targetPlayerName);
+            MainThread.runSync(server, () -> Messages.to(target, Text.translatable("admin.freeze.unfrozen")));
+            return String.format("✅ Unfrozen %s", targetPlayerName);
         }
     }
-    
-    @Tool(
-        name = "teleport_player_force",
-        description = """
-        强制传送玩家到指定位置或其他玩家身边。
-        只有管理员才能使用此功能。
-        
-        这是一个强制性操作，玩家无法拒绝。
-        可以传送到坐标或其他玩家位置。
-        """
-    )
+
+    // ---- Force Teleport ----
+
+    @Tool(name = "teleport_player_force",
+          description = "Force teleport a player to coordinates or another player's location. Admin only.")
     public String forcePlayerTeleport(
-        @ToolParam(description = "执行传送操作的管理员名称") String adminName,
-        @ToolParam(description = "要传送的玩家名称") String targetPlayerName,
-        @ToolParam(description = "目标X坐标，如果传送到玩家则可选") Double x,
-        @ToolParam(description = "目标Y坐标，如果传送到玩家则可选") Double y,
-        @ToolParam(description = "目标Z坐标，如果传送到玩家则可选") Double z,
-        @ToolParam(description = "目标玩家名称，如果传送到坐标则可选") String targetLocation
+            @ToolParam(description = "Admin name performing the action") String adminName,
+            @ToolParam(description = "Target player name") String targetPlayerName,
+            @ToolParam(description = "Target X (optional when teleporting to player)") Double x,
+            @ToolParam(description = "Target Y (optional when teleporting to player)") Double y,
+            @ToolParam(description = "Target Z (optional when teleporting to player)") Double z,
+            @ToolParam(description = "Destination player name (optional when using coordinates)") String targetLocation
     ) {
-        AusukaAiMod.LOGGER.debug("{} [tool:teleport_player_force] params admin='{}' target='{}' to=({}, {}, {}) destPlayer='{}'",
+        AusukaAiMod.LOGGER.debug("{} [tool:teleport_player_force] admin='{}' target='{}' xyz=({}, {}, {}) destPlayer='{}'",
                 RequestContext.midTag(), adminName, targetPlayerName, x, y, z, targetLocation);
-        // 权限验证
-        String permissionCheck = modAdminSystem.checkPermissionWithMessage(
-            adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "强制传送玩家");
-        if (!"PERMISSION_GRANTED".equals(permissionCheck)) {
-            return permissionCheck;
-        }
-        
-        ServerPlayerEntity targetPlayer = server.getPlayerManager().getPlayer(targetPlayerName);
-        if (targetPlayer == null) {
-            return "❌ 找不到玩家：" + targetPlayerName;
-        }
-        
+        String permission = modAdminSystem.checkPermissionWithMessage(adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "force teleport player");
+        if (!"PERMISSION_GRANTED".equals(permission)) return permission;
+
+        ServerPlayerEntity target = server.getPlayerManager().getPlayer(targetPlayerName);
+        if (target == null) return "❌ Player not found: " + targetPlayerName;
+
         try {
-            if (targetLocation != null) {
-                // 传送到其他玩家位置
-                ServerPlayerEntity destinationPlayer = server.getPlayerManager().getPlayer(targetLocation);
-                if (destinationPlayer == null) {
-                    return "❌ 找不到目标玩家：" + targetLocation;
-                }
-                
-                Vec3d destPos = destinationPlayer.getPos();
-                targetPlayer.teleport(targetPlayer.getWorld(), destPos.x, destPos.y, destPos.z, Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
-                
-                targetPlayer.sendMessage(Text.of("§e[管理] 你被传送到 " + targetLocation + " 身边"));
-                
-                return String.format("✅ 已将 %s 传送到 %s 身边", targetPlayerName, targetLocation);
-                
-            } else if (x != null && y != null && z != null) {
-                // 传送到指定坐标（同世界）
-                targetPlayer.teleport(targetPlayer.getWorld(), x, y, z, Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
-                
-                targetPlayer.sendMessage(Text.of(String.format("§e[管理] 你被传送到坐标 (%.1f, %.1f, %.1f)", x, y, z)));
-                
-                return String.format("✅ 已将 %s 传送到坐标 (%.1f, %.1f, %.1f)", targetPlayerName, x, y, z);
-                
-            } else {
-                return "❌ 请提供目标坐标或目标玩家名称";
+            if (targetLocation != null && !targetLocation.isBlank()) {
+                ServerPlayerEntity dest = server.getPlayerManager().getPlayer(targetLocation);
+                if (dest == null) return "❌ Destination player not found: " + targetLocation;
+                MainThread.runSync(server, () -> target.teleport(dest.getWorld(), dest.getX(), dest.getY(), dest.getZ(), Set.of(), dest.getYaw(), dest.getPitch(), false));
+                MainThread.runSync(server, () -> Messages.to(target, Text.translatable("admin.teleport.to_player", dest.getName().getString())));
+                return String.format("✅ Teleported %s to %s", targetPlayerName, targetLocation);
             }
-            
+            if (x != null && y != null && z != null) {
+                double tx = x, ty = y, tz = z;
+                MainThread.runSync(server, () -> target.teleport(target.getWorld(), tx, ty, tz, Set.of(), target.getYaw(), target.getPitch(), false));
+                String sx = String.format("%.1f", tx), sy = String.format("%.1f", ty), sz = String.format("%.1f", tz);
+                MainThread.runSync(server, () -> Messages.to(target, Text.translatable("admin.teleport.to_coords", sx, sy, sz)));
+                return String.format("✅ Teleported %s to (%.1f, %.1f, %.1f)", targetPlayerName, tx, ty, tz);
+            }
+            return "❌ Provide coordinates or destination player name.";
         } catch (Exception e) {
-            return "❌ 传送失败：" + e.getMessage();
+            return "❌ Teleport failed: " + e.getMessage();
         }
     }
-    
-    @Tool(
-        name = "jail_player",
-        description = """
-        将玩家关入监狱，限制其移动范围。
-        只有管理员才能使用此功能。
-        
-        被监禁的玩家将被传送到监狱区域，无法离开。
-        这是一个临时性的惩罚措施。
-        """
-    )
+
+    // ---- Jail ----
+
+    @Tool(name = "jail_player",
+          description = "Jail or release a player. Admin only. Jail requires a saved 'jail' location via memory tools.")
     public String jailPlayer(
-        @ToolParam(description = "执行监禁操作的管理员名称") String adminName,
-        @ToolParam(description = "要监禁的玩家名称") String targetPlayerName,
-        @ToolParam(description = "是否监禁，true为监禁，false为释放") boolean jail,
-        @ToolParam(description = "监禁原因，可选") String reason
+            @ToolParam(description = "Admin name performing the action") String adminName,
+            @ToolParam(description = "Target player name") String targetPlayerName,
+            @ToolParam(description = "true=jail, false=release") boolean jail,
+            @ToolParam(description = "Jail location name (optional, default 'jail')") String jailLocationName,
+            @ToolParam(description = "Reason (optional)") String reason
     ) {
-        AusukaAiMod.LOGGER.debug("{} [tool:jail_player] params admin='{}' target='{}' jail={} reason='{}'",
+        AusukaAiMod.LOGGER.debug("{} [tool:jail_player] admin='{}' target='{}' jail={} reason='{}'",
                 RequestContext.midTag(), adminName, targetPlayerName, jail, reason);
-        // 权限验证
-        String permissionCheck = modAdminSystem.checkPermissionWithMessage(
-            adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "监禁/释放玩家");
-        if (!"PERMISSION_GRANTED".equals(permissionCheck)) {
-            return permissionCheck;
-        }
-        
-        ServerPlayerEntity targetPlayer = server.getPlayerManager().getPlayer(targetPlayerName);
-        if (targetPlayer == null) {
-            return "❌ 找不到玩家：" + targetPlayerName;
-        }
-        
-        // 不能监禁管理员
-        if (isPlayerAdmin(server, targetPlayer)) {
-            return "❌ 不能监禁其他管理员";
-        }
-        
+        String permission = modAdminSystem.checkPermissionWithMessage(adminName, ModAdminSystem.PermissionLevel.MOD_ADMIN, "jail player");
+        if (!"PERMISSION_GRANTED".equals(permission)) return permission;
+
+        ServerPlayerEntity target = server.getPlayerManager().getPlayer(targetPlayerName);
+        if (target == null) return "❌ Player not found: " + targetPlayerName;
+        if (isPlayerAdmin(server, target)) return "❌ Cannot jail another admin.";
+
         if (jail) {
-            // 监禁玩家
-            Vec3d originalPos = targetPlayer.getPos();
-            Vec3d jailPos = new Vec3d(0, 100, 0); // 默认监狱坐标
-            
-            jailedPlayers.put(targetPlayerName, new JailInfo(originalPos, reason));
-            
-            // 传送到监狱（同世界）
-            targetPlayer.teleport(targetPlayer.getWorld(), jailPos.x, jailPos.y, jailPos.z, Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
-            
-            String jailReason = reason != null ? reason : "违反服务器规则";
-            targetPlayer.sendMessage(Text.of("§c[系统] 你已被监禁：" + jailReason));
-            
-            return String.format("✅ 已监禁玩家 %s，原因：%s", targetPlayerName, jailReason);
-        } else {
-            // 释放玩家
-            JailInfo jailInfo = jailedPlayers.remove(targetPlayerName);
-            if (jailInfo == null) {
-                return "❌ 玩家 " + targetPlayerName + " 不在监狱中";
+            String name = (jailLocationName == null || jailLocationName.isBlank()) ? "jail" : jailLocationName.trim();
+            // Prefer server-wide memory, then admin's memory
+            var loc = AiRuntime.getConversationMemory().getLocationForTeleport("server", name);
+            if (loc == null) {
+                loc = AiRuntime.getConversationMemory().getLocationForTeleport(adminName, name);
             }
-            
-            // 传送回原位置（同世界）
-            Vec3d originalPos = jailInfo.originalPosition;
-            targetPlayer.teleport(targetPlayer.getWorld(), originalPos.x, originalPos.y, originalPos.z, Set.of(), targetPlayer.getYaw(), targetPlayer.getPitch(), false);
-            
-            targetPlayer.sendMessage(Text.of("§a[系统] 你已被释放，请遵守服务器规则"));
-            
-            return String.format("✅ 已释放玩家 %s", targetPlayerName);
+            if (loc == null) {
+                return "❌ Jail location not found. Use memory tools to save a location named '" + name + "' (playerName='server' recommended).";
+            }
+
+            // Resolve world by id
+            Identifier dimId = Identifier.tryParse(loc.world());
+            ServerWorld world = null;
+            if (dimId != null) {
+                for (ServerWorld w : server.getWorlds()) {
+                    if (w.getRegistryKey().getValue().equals(dimId)) { world = w; break; }
+                }
+            }
+            if (world == null) world = target.getWorld();
+
+            Vec3d originalPos = target.getPos();
+            RegistryKey<World> originalDim = target.getWorld().getRegistryKey();
+            jailedPlayers.put(targetPlayerName, new JailInfo(originalPos, originalDim, (reason == null ? "unspecified" : reason)));
+
+            double jx = loc.x(), jy = loc.y(), jz = loc.z();
+            ServerWorld finalWorld = world;
+            MainThread.runSync(server, () -> target.teleport(finalWorld, jx, jy, jz, Set.of(), target.getYaw(), target.getPitch(), false));
+            // Freeze after jailing
+            frozenPlayers.put(targetPlayerName, new Vec3d(jx, jy, jz));
+            MainThread.runSync(server, () -> Messages.to(target, Text.translatable("admin.jail.jailed")));
+            MainThread.runSync(server, () -> Messages.to(target, Text.translatable("admin.freeze.frozen")));
+            return String.format("✅ Jailed %s at %s", targetPlayerName, name);
+        } else {
+            JailInfo info = jailedPlayers.remove(targetPlayerName);
+            if (info == null) return "❌ Player is not jailed: " + targetPlayerName;
+            ServerWorld world = server.getWorld(info.originalDimension);
+            if (world == null) world = target.getWorld();
+            Vec3d pos = info.originalPosition;
+            ServerWorld finalWorld = world;
+            MainThread.runSync(server, () -> target.teleport(finalWorld, pos.x, pos.y, pos.z, Set.of(), target.getYaw(), target.getPitch(), false));
+            frozenPlayers.remove(targetPlayerName);
+            MainThread.runSync(server, () -> Messages.to(target, Text.translatable("admin.jail.released")));
+            return String.format("✅ Released %s", targetPlayerName);
         }
     }
-    
-    @Tool(
-        name = "get_player_admin_status",
-        description = """
-        获取玩家的详细权限状态信息。
-        包括服务器OP权限、MOD管理员权限等。
-        
-        返回完整的权限级别和权限范围信息。
-        """
-    )
-    public String getPlayerAdminStatus(
-        @ToolParam(description = "要查询的玩家名称") String playerName
-    ) {
+
+    // ---- Admin status report ----
+
+    @Tool(name = "get_player_admin_status",
+          description = "Return a human-readable admin capability summary for a player.")
+    public String getPlayerAdminStatus(@ToolParam(description = "Player name") String playerName) {
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerName);
-        if (player == null) {
-            return "❌ 找不到玩家：" + playerName;
-        }
-        
-        boolean isServerAdmin = isPlayerAdmin(server, player);
-        ModAdminSystem.PermissionLevel modPermission = modAdminSystem.getPlayerPermission(playerName);
-        
-        String serverType = server.isDedicated() ? "专用服务器" : "单人游戏/局域网";
-        
-        StringBuilder status = new StringBuilder();
-        status.append(String.format("📊 %s 权限状态报告\n", playerName));
-        status.append(String.format("🖥️ 服务器类型：%s\n", serverType));
-        status.append(String.format("👑 服务器管理员(OP)：%s\n", isServerAdmin ? "✅ 是" : "❌ 否"));
-        status.append(String.format("🛡️ MOD权限级别：%s\n", modPermission.getDisplayName()));
-        
-        if (frozenPlayers.containsKey(playerName)) {
-            status.append("🧊 当前状态：被冻结\n");
-        }
-        
-        if (jailedPlayers.containsKey(playerName)) {
-            JailInfo jailInfo = jailedPlayers.get(playerName);
-            status.append(String.format("🔒 当前状态：被监禁 - %s\n", jailInfo.reason));
-        }
-        
-        status.append("\n可执行操作：\n");
-        if (modPermission == ModAdminSystem.PermissionLevel.USER) {
-            status.append("• 基础AI功能\n");
-        } else {
-            status.append("• AI管理功能\n");
-            status.append("• 自动消息系统控制\n");
-            if (isServerAdmin) {
-                status.append("• 服务器管理功能\n");
-                status.append("• 玩家管理（踢人、封禁、监禁等）\n");
-                status.append("• 世界控制功能\n");
-            }
-        }
-        
-        return status.toString();
+        if (player == null) return "❌ Player not found: " + playerName;
+        boolean serverAdmin = isPlayerAdmin(server, player);
+        ModAdminSystem.PermissionLevel level = modAdminSystem.getPlayerPermission(playerName);
+
+        String serverType = server.isDedicated() ? "Dedicated" : "Singleplayer/LAN";
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("📊 %s Admin Status\n", playerName));
+        sb.append(String.format("🖥️ Server type: %s\n", serverType));
+        sb.append(String.format("👑 OP/Host: %s\n", serverAdmin ? "yes" : "no"));
+        sb.append(String.format("🛡️ Mod permission: %s\n", level.name()));
+        if (frozenPlayers.containsKey(playerName)) sb.append("🧊 State: frozen\n");
+        if (jailedPlayers.containsKey(playerName)) sb.append("🔒 State: jailed\n");
+        sb.append("\nAvailable actions depend on level and OP status.\n");
+        return sb.toString();
     }
-    
-    /**
-     * 获取管理员欢迎信息（供聊天系统调用）
-     */
+
+    /** Admin welcome info for chat systems. */
     public static String getAdminWelcomeInfo(String playerName) {
-        return String.format("🛡️ 管理员 %s，欢迎使用AI助手管理系统！\n" +
-            "你拥有以下额外权限：踢人、封禁、冻结、强制传送、监禁等功能。\n" +
-            "使用时请谨慎，确保服务器秩序和玩家体验。", playerName);
+        return String.format("🛡️ Admin %s, welcome to Ausuka.ai. You have access to moderation tools like kick, ban, freeze, force teleport, and jail. Use responsibly.", playerName);
     }
-    
-    /**
-     * 监禁信息数据类
-     */
+
+    // ---- Internals ----
+
     private static class JailInfo {
-        public final Vec3d originalPosition;
-        public final String reason;
-        
-        public JailInfo(Vec3d originalPosition, String reason) {
+        final Vec3d originalPosition;
+        final RegistryKey<World> originalDimension;
+        final String reason;
+
+        JailInfo(Vec3d originalPosition, RegistryKey<World> originalDimension, String reason) {
             this.originalPosition = originalPosition;
-            this.reason = reason != null ? reason : "未指定原因";
+            this.originalDimension = originalDimension;
+            this.reason = reason;
         }
     }
+
+    // No local jail location storage; jail coordinates are looked up via MemoryTools.
 }

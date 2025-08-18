@@ -1,274 +1,448 @@
 package com.hinadt.tools;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import com.hinadt.AusukaAiMod;
 import com.hinadt.observability.RequestContext;
+import com.hinadt.util.MainThread;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
+import net.minecraft.world.GameRules;
 import net.minecraft.world.World;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
-import java.util.concurrent.CountDownLatch;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-/**
- * 天气控制工具
- * 支持晴天、雨天、雷雨等天气控制
- */
+@SuppressWarnings("resource")
 public class WeatherTools {
-    
+
+    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
     private final MinecraftServer server;
-    
-    public WeatherTools(MinecraftServer server) {
-        this.server = server;
-    }
-    
+
+    public WeatherTools(MinecraftServer server) { this.server = server; }
+
+    /* ================= change_weather ================= */
+
     @Tool(
-        name = "change_weather",
-        description = """
-        高级天气控制工具：精确控制游戏世界的天气状况，创造理想的游戏环境。
-        
-        支持的天气类型：
-        - clear/晴天：清除所有降水和雷暴，创造明亮清爽的环境
-        - rain/雨天：启动降雨天气，适合农业活动和水资源收集
-        - thunder/雷雨：激活雷暴天气，产生闪电和雷声效果
-        
-        智能特性：
-        - 精确时长控制：可自定义天气持续时间
-        - 多世界支持：可指定不同维度的天气
-        - 即时生效：天气变化立即在所有玩家客户端同步
-        - 自然过渡：天气变化具有自然的视觉过渡效果
-        
-        使用场景：
-        - 建筑摄影：创造完美的拍摄环境
-        - 农业活动：雨天促进作物生长
-        - 冒险氛围：雷雨天增加探险刺激感
-        - 活动组织：为特殊活动设置合适天气
-        
-        技术优势：
-        - 服务器级别控制，影响所有玩家
-        - 兼容原版天气循环系统
-        - 支持持续时间精确控制
+            name = "change_weather",
+            description = """
+        Change the weather in a given world with safety checks.
+
+        INPUT
+          - weatherType: clear | rain | thunder (synonyms accepted; case-insensitive)
+          - duration: duration as seconds or human format (e.g. "600", "10m", "90s", "2h30m"); default 10m
+          - world: optional. "overworld" | "nether" | "end" or full id "minecraft:the_nether".
+          - freezeCycle: optional boolean. If true, disables weather cycle; if false, enables it; if null, leave unchanged.
+
+        OUTPUT (JSON)
+          {
+            "ok": true/false,
+            "code": "OK" | "ERR_BAD_TYPE" | "ERR_WORLD_UNAVAILABLE" | "NO_WEATHER_IN_DIMENSION" | "ERR_APPLY",
+            "message": "...",
+            "world": "minecraft:overworld",
+            "weather": "clear|rain|thunder",
+            "durationSeconds": 600,
+            "freezeCycleApplied": true/false/null
+          }
         """
     )
     public String changeWeather(
-        @ToolParam(description = "天气类型：clear/晴天、rain/雨天、thunder/雷雨") String weatherType,
-        @ToolParam(description = "持续时间（秒），可选，默认600秒（10分钟）") Integer duration,
-        @ToolParam(description = "目标世界，可选：overworld(主世界)、nether(下界)、end(末地)，默认主世界") String world
+            @ToolParam(description = "clear/rain/thunder or synonyms") String weatherType,
+            @ToolParam(description = "duration (e.g. 600, 10m, 90s, 2h30m)") String duration,
+            @ToolParam(description = "world alias or id (optional)") String world,
+            @ToolParam(description = "freeze weather cycle? true/false (optional)") Boolean freezeCycle
     ) {
-        AusukaAiMod.LOGGER.debug("{} [tool:change_weather] params type='{}' duration={} world='{}'",
-                RequestContext.midTag(), weatherType, duration, world);
-        ServerWorld targetWorld = getTargetWorld(world);
-        if (targetWorld == null) {
-            targetWorld = server.getOverworld();
+        AusukaAiMod.LOGGER.debug("{} [tool:change_weather] args type='{}' duration='{}' world='{}' freezeCycle={}",
+                RequestContext.midTag(), weatherType, duration, world, freezeCycle);
+
+        final String kind = normalizeWeather(weatherType);
+        if (kind == null) return jsonError("ERR_BAD_TYPE", "Unsupported weather type: " + weatherType);
+
+        final int seconds = parseDurationSeconds(duration, 600); // default 10m
+        final ServerWorld w = worldFromAny(world);
+        final ServerWorld target = (w != null) ? w : server.getOverworld();
+        if (target == null) return jsonError("ERR_WORLD_UNAVAILABLE", "Target world unavailable.");
+
+        final String worldId = target.getRegistryKey().getValue().toString();
+        AusukaAiMod.LOGGER.debug("{} [change_weather] normalized type='{}' seconds={} world='{}'",
+                RequestContext.midTag(), kind, seconds, worldId);
+
+        // weather not supported in nether/end
+        if (!supportsWeather(target)) {
+            AusukaAiMod.LOGGER.debug("{} [change_weather] dimension has no weather world='{}'", RequestContext.midTag(), worldId);
+            return jsonError("NO_WEATHER_IN_DIMENSION", "This dimension has no rain/thunder: " + worldId);
         }
-        
-        final ServerWorld finalTargetWorld = targetWorld;
-        final int weatherDuration = (duration != null && duration > 0) ? duration * 20 : 12000; // 转换为游戏tick
-        
-        AtomicReference<String> result = new AtomicReference<>("Weather change failed");
-        
-        runOnMainAndWait(() -> {
+
+        AtomicReference<String> out = new AtomicReference<>();
+        MainThread.runSync(server, () -> {
             try {
-                String weatherName = parseWeatherType(weatherType);
-                
-                switch (weatherName.toLowerCase()) {
-                    case "clear":
-                    case "晴天":
-                        finalTargetWorld.setWeather(weatherDuration, 0, false, false);
-                        result.set("Clear weather set for " + (weatherDuration/20) + " seconds");
-                        break;
-                        
-                    case "rain":
-                    case "雨天":
-                        finalTargetWorld.setWeather(0, weatherDuration, true, false);
-                        result.set("Rainy weather set for " + (weatherDuration/20) + " seconds");
-                        break;
-                        
-                    case "thunder":
-                    case "雷雨":
-                        finalTargetWorld.setWeather(0, weatherDuration, true, true);
-                        result.set("Thunderstorm set for " + (weatherDuration/20) + " seconds");
-                        break;
-                        
-                    default:
-                        result.set("Unknown weather type: " + weatherType + ". Supported: clear, rain, thunder");
-                        return;
+                final int clearTicks  = kind.equals("clear")   ? seconds * 20 : 0;
+                final int rainTicks   = (kind.equals("rain") || kind.equals("thunder")) ? seconds * 20 : 0;
+                final boolean raining = !kind.equals("clear");
+                final boolean thunder = kind.equals("thunder");
+
+                target.setWeather(clearTicks, rainTicks, raining, thunder);
+
+                Boolean freezeApplied = null;
+                if (freezeCycle != null) {
+                    target.getGameRules().get(GameRules.DO_WEATHER_CYCLE).set(!freezeCycle, server);
+                    freezeApplied = freezeCycle;
                 }
-                
-                String worldName = getWorldDisplayName(finalTargetWorld);
-                AusukaAiMod.LOGGER.debug("{} [tool:change_weather] result='{}' world='{}'",
-                        RequestContext.midTag(), result.get(), worldName);
-                
+
+                JsonObject res = new JsonObject();
+                res.addProperty("ok", true);
+                res.addProperty("code", "OK");
+                res.addProperty("message", "Weather changed");
+                res.addProperty("world", worldId);
+                res.addProperty("weather", kind);
+                res.addProperty("durationSeconds", seconds);
+                if (freezeCycle != null) res.addProperty("freezeCycleApplied", freezeApplied);
+                out.set(GSON.toJson(res));
+
+                AusukaAiMod.LOGGER.debug("{} [change_weather] applied world='{}' weather='{}' sec={} freezeCycle={}",
+                        RequestContext.midTag(), worldId, kind, seconds, freezeCycle);
+
             } catch (Exception e) {
-                String errorMsg = "Weather change failed: " + e.getMessage();
-                result.set(errorMsg);
-                AusukaAiMod.LOGGER.error("变更天气时出错", e);
+                AusukaAiMod.LOGGER.error("{} [change_weather] ERR_APPLY {}", RequestContext.midTag(), e.toString(), e);
+                out.set(jsonError("ERR_APPLY", "Failed to apply weather: " + e.getMessage()));
             }
         });
-        
-        return result.get();
+        return out.get();
     }
-    
+
+    /* ================= set_time ================= */
+
     @Tool(
-        name = "set_time",
-        description = """
-        设置指定世界的时间。支持的时间：
-        - day/白天：设置为白天
-        - night/夜晚：设置为夜晚
-        - noon/正午：设置为正午
-        - midnight/午夜：设置为午夜
-        - 数字：直接设置游戏时间（0-24000）
+            name = "set_time",
+            description = """
+        Set the time of day in a given world.
+
+        INPUT
+          - time: keywords [day=1000, sunrise=0, noon=6000, sunset=12000, night=13000, midnight=18000],
+                  or "0..24000", or offset like "+1000"/"-500", or "HH:mm" (24h).
+          - world: optional. "overworld" | "nether" | "end" or full id.
+          - freezeCycle: optional boolean. If true disables daylight cycle; false enables; null unchanged.
+
+        OUTPUT (JSON)
+          {
+            "ok": true/false,
+            "code": "OK" | "ERR_BAD_TIME" | "ERR_WORLD_UNAVAILABLE" | "ERR_APPLY",
+            "message": "...",
+            "world": "minecraft:overworld",
+            "timeOfDay": 6000,
+            "timeKey": "noon",
+            "freezeCycleApplied": true/false/null
+          }
         """
     )
     public String setTime(
-        @ToolParam(description = "时间类型：day/白天、night/夜晚、noon/正午、midnight/午夜，或具体数字(0-24000)") String timeType,
-        @ToolParam(description = "目标世界，可选：overworld(主世界)、nether(下界)、end(末地)，默认主世界") String world
+            @ToolParam(description = "time keyword/number/offset/HH:mm") String time,
+            @ToolParam(description = "world alias or id (optional)") String world,
+            @ToolParam(description = "freeze daylight cycle? true/false (optional)") Boolean freezeCycle
     ) {
-        AusukaAiMod.LOGGER.debug("{} [tool:set_time] params type='{}' world='{}'",
-                RequestContext.midTag(), timeType, world);
-        ServerWorld targetWorld = getTargetWorld(world);
-        if (targetWorld == null) {
-            targetWorld = server.getOverworld();
-        }
-        
-        final ServerWorld finalTargetWorld = targetWorld;
-        AtomicReference<String> result = new AtomicReference<>("Time set failed");
-        
-        runOnMainAndWait(() -> {
+        AusukaAiMod.LOGGER.debug("{} [tool:set_time] args time='{}' world='{}' freezeCycle={}",
+                RequestContext.midTag(), time, world, freezeCycle);
+
+        final ServerWorld w = worldFromAny(world);
+        final ServerWorld target = (w != null) ? w : server.getOverworld();
+        if (target == null) return jsonError("ERR_WORLD_UNAVAILABLE", "Target world unavailable.");
+        final String worldId = target.getRegistryKey().getValue().toString();
+
+        final long current = target.getTimeOfDay() % 24000L;
+        final Long parsed = parseTimeValue(time, current);
+        if (parsed == null) return jsonError("ERR_BAD_TIME", "Unsupported time format: " + time);
+
+        final long newTod = ((parsed % 24000L) + 24000L) % 24000L; // normalize
+        AusukaAiMod.LOGGER.debug("{} [set_time] parsed current={} -> newTod={} world='{}'",
+                RequestContext.midTag(), current, newTod, worldId);
+
+        AtomicReference<String> out = new AtomicReference<>();
+        MainThread.runSync(server, () -> {
             try {
-                long gameTime = parseTimeType(timeType);
-                if (gameTime == -1) {
-                    result.set("Unknown time type: " + timeType + ". Supported: day, night, noon, midnight or 0-24000");
-                    return;
+                target.setTimeOfDay(newTod);
+                Boolean freezeApplied = null;
+                if (freezeCycle != null) {
+                    target.getGameRules().get(GameRules.DO_DAYLIGHT_CYCLE).set(!freezeCycle, server);
+                    freezeApplied = freezeCycle;
                 }
-                
-                finalTargetWorld.setTimeOfDay(gameTime);
-                
-                String timeKey = resolveTimeKey(gameTime);
-                String worldName = getWorldDisplayName(finalTargetWorld);
-                
-                result.set("Time set to " + timeKey + " (world: " + worldName + ")");
-                AusukaAiMod.LOGGER.debug("{} [tool:set_time] result='{}'",
-                        RequestContext.midTag(), result.get());
-                
+
+                JsonObject res = new JsonObject();
+                res.addProperty("ok", true);
+                res.addProperty("code", "OK");
+                res.addProperty("message", "Time changed");
+                res.addProperty("world", worldId);
+                res.addProperty("timeOfDay", newTod);
+                res.addProperty("timeKey", timeKey(newTod));
+                if (freezeCycle != null) res.addProperty("freezeCycleApplied", freezeApplied);
+                out.set(GSON.toJson(res));
+
+                AusukaAiMod.LOGGER.debug("{} [set_time] applied world='{}' timeOfDay={} key='{}' freezeCycle={}",
+                        RequestContext.midTag(), worldId, newTod, timeKey(newTod), freezeCycle);
+
+                // 也可选择给该世界在线玩家发一个系统提示
+                // target.getPlayers().forEach(p -> p.sendMessageToClient(Text.of("[AI] Time set to " + timeKey(newTod)), false));
+
             } catch (Exception e) {
-                String errorMsg = "Time set failed: " + e.getMessage();
-                result.set(errorMsg);
-                AusukaAiMod.LOGGER.error("设置时间时出错", e);
+                AusukaAiMod.LOGGER.error("{} [set_time] ERR_APPLY {}", RequestContext.midTag(), e.toString(), e);
+                out.set(jsonError("ERR_APPLY", "Failed to set time: " + e.getMessage()));
             }
         });
-        
-        return result.get();
+        return out.get();
     }
-    
-    private String parseWeatherType(String weatherType) {
-        String lower = weatherType.toLowerCase().trim();
-        switch (lower) {
-            case "晴":
-            case "晴天":
-            case "clear":
-            case "sunny":
-                return "clear";
-            case "雨":
-            case "雨天":
-            case "下雨":
-            case "rain":
-            case "rainy":
-                return "rain";
-            case "雷":
-            case "雷雨":
-            case "雷暴":
-            case "thunder":
-            case "thunderstorm":
-            case "storm":
-                return "thunder";
-            default:
-                return weatherType;
+
+
+    @Tool(
+            name = "get_world_state",
+            description = """
+    Get the current weather/time state of a world.
+
+    INPUT
+      - world: optional. "overworld" | "nether" | "end" or full id "minecraft:the_nether".
+               If omitted, defaults to the Overworld.
+
+    OUTPUT (JSON)
+      {
+        "ok": true,
+        "code": "OK",
+        "world": "minecraft:overworld",
+        "supportsWeather": true,
+        "isRaining": false,
+        "isThundering": false,
+        "rainGradient": 0.0,
+        "thunderGradient": 0.0,
+        "clearWeatherTimeTicks": 0,     // present if retrievable
+        "rainTimeTicks": 0,             // present if retrievable
+        "thunderTimeTicks": 0,          // present if retrievable
+        "timeOfDay": 6000,
+        "timeKey": "noon",
+        "totalTime": 1234567,
+        "day": 51,
+        "moonPhase": 3,                 // 0..7
+        "daylightCycle": true,
+        "weatherCycle": true,
+        "players": 2,
+        "difficulty": "normal"
+      }
+    """
+    )
+    public String getWorldState(
+            @ToolParam(description = "world alias or id (optional)") String world
+    ) {
+        AusukaAiMod.LOGGER.debug("{} [tool:get_world_state] args world='{}'",
+                RequestContext.midTag(), world);
+
+        final ServerWorld w = worldFromAny(world);
+        final ServerWorld target = (w != null) ? w : server.getOverworld();
+        if (target == null) return jsonError("ERR_WORLD_UNAVAILABLE", "Target world unavailable.");
+
+        final String worldId = target.getRegistryKey().getValue().toString();
+
+        java.util.concurrent.atomic.AtomicReference<String> out = new java.util.concurrent.atomic.AtomicReference<>();
+        MainThread.runSync(server, () -> {
+            try {
+                boolean supports = supportsWeather(target);
+                boolean raining = target.isRaining();
+                boolean thundering = target.isThundering();
+                float rainGrad = target.getRainGradient(1.0f);
+                float thunderGrad = target.getThunderGradient(1.0f);
+
+                long timeOfDay = target.getTimeOfDay() % 24000L;   // 0..23999
+                long totalTime = target.getTime();                  // total ticks since world start
+                long day = totalTime / 24000L;
+                int moonPhase = (int)((totalTime / 24000L) % 8L);
+
+                boolean daylightCycle = target.getGameRules().getBoolean(net.minecraft.world.GameRules.DO_DAYLIGHT_CYCLE);
+                boolean weatherCycle  = target.getGameRules().getBoolean(net.minecraft.world.GameRules.DO_WEATHER_CYCLE);
+
+                int players = target.getPlayers().size();
+                String difficulty = target.getDifficulty().getName();
+
+                com.google.gson.JsonObject res = new com.google.gson.JsonObject();
+                res.addProperty("ok", true);
+                res.addProperty("code", "OK");
+                res.addProperty("world", worldId);
+                res.addProperty("supportsWeather", supports);
+                res.addProperty("isRaining", raining);
+                res.addProperty("isThundering", thundering);
+                res.addProperty("rainGradient", round3(rainGrad));
+                res.addProperty("thunderGradient", round3(thunderGrad));
+
+                // Best-effort: read remaining weather times via reflection (mapping-safe).
+                addWeatherTimesIfAvailable(res, target);
+
+                res.addProperty("timeOfDay", timeOfDay);
+                res.addProperty("timeKey", timeKey(timeOfDay));
+                res.addProperty("totalTime", totalTime);
+                res.addProperty("day", day);
+                res.addProperty("moonPhase", moonPhase);
+                res.addProperty("daylightCycle", daylightCycle);
+                res.addProperty("weatherCycle", weatherCycle);
+                res.addProperty("players", players);
+                res.addProperty("difficulty", difficulty);
+
+                out.set(GSON.toJson(res));
+
+                AusukaAiMod.LOGGER.debug("{} [tool:get_world_state] world='{}' raining={} thundering={} tod={} key='{}'",
+                        RequestContext.midTag(), worldId, raining, thundering, timeOfDay, timeKey(timeOfDay));
+            } catch (Exception e) {
+                AusukaAiMod.LOGGER.error("{} [tool:get_world_state] error {}", RequestContext.midTag(), e.toString(), e);
+                out.set(jsonError("ERR_GET_STATE", "Failed to get world state: " + e.getMessage()));
+            }
+        });
+        return out.get();
+    }
+
+
+
+
+
+    /* ================= helpers ================= */
+
+    private boolean supportsWeather(ServerWorld w) {
+        var key = w.getRegistryKey();
+        return key == World.OVERWORLD; // vanilla: only overworld has rain/thunder
+    }
+
+    /** normalize clear/rain/thunder and common synonyms (en/zh) */
+    private String normalizeWeather(String s) {
+        if (s == null) return null;
+        String k = s.trim().toLowerCase(Locale.ROOT);
+        if (k.isEmpty()) return null;
+        switch (k) {
+            case "clear": case "sunny": case "晴": case "晴天": return "clear";
+            case "rain": case "rainy": case "雨": case "下雨": case "雨天": return "rain";
+            case "thunder": case "thunderstorm": case "storm": case "雷": case "雷雨": case "雷暴": return "thunder";
+            default: return null;
         }
     }
-    
-    private long parseTimeType(String timeType) {
-        String lower = timeType.toLowerCase().trim();
-        
-        switch (lower) {
-            case "day":
-            case "白天":
-            case "早上":
-            case "morning":
-                return 1000L; // 早上
-            case "noon":
-            case "正午":
-            case "中午":
-                return 6000L; // 正午
-            case "night":
-            case "夜晚":
-            case "晚上":
-            case "evening":
-                return 13000L; // 夜晚
-            case "midnight":
-            case "午夜":
-            case "深夜":
-                return 18000L; // 午夜
-            default:
-                try {
-                    long time = Long.parseLong(timeType);
-                    if (time >= 0 && time <= 24000) {
-                        return time;
-                    }
-                } catch (NumberFormatException ignored) {}
-                return -1;
+
+    /** parse "600", "10m", "90s", "2h30m" → seconds; defaultSec used if null/blank */
+    private int parseDurationSeconds(String s, int defaultSec) {
+        if (s == null || s.isBlank()) return defaultSec;
+        String in = s.trim().toLowerCase(Locale.ROOT);
+        if (in.matches("^\\d+$")) return clampSeconds(Integer.parseInt(in));
+        Pattern p = Pattern.compile("(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?");
+        Matcher m = p.matcher(in);
+        if (m.matches()) {
+            int h = (m.group(1) != null) ? Integer.parseInt(m.group(1)) : 0;
+            int mnt = (m.group(2) != null) ? Integer.parseInt(m.group(2)) : 0;
+            int sec = (m.group(3) != null) ? Integer.parseInt(m.group(3)) : 0;
+            return clampSeconds(h * 3600 + mnt * 60 + sec);
         }
+        // also accept "5min"
+        if (in.endsWith("min")) {
+            String num = in.substring(0, in.length() - 3).trim();
+            if (num.matches("^\\d+$")) return clampSeconds(Integer.parseInt(num) * 60);
+        }
+        return defaultSec;
     }
-    
-    private String resolveTimeKey(long gameTime) {
-        if (gameTime >= 0 && gameTime < 6000) return "day";
-        if (gameTime >= 6000 && gameTime < 12000) return "noon";
-        if (gameTime >= 12000 && gameTime < 18000) return "night";
+
+    private int clampSeconds(int s) { return Math.max(1, Math.min(24 * 3600, s)); }
+
+    /** parse time to time-of-day [0..23999]; support keywords, absolute, offsets, and HH:mm */
+    private Long parseTimeValue(String s, long current) {
+        if (s == null || s.isBlank()) return null;
+        String k = s.trim().toLowerCase(Locale.ROOT);
+        switch (k) {
+            case "sunrise": case "dawn": case "黎明": return 0L;
+            case "day": case "白天": case "早上": case "morning": return 1000L;
+            case "noon": case "正午": case "中午": return 6000L;
+            case "sunset": case "黄昏": case "傍晚": return 12000L;
+            case "night": case "夜晚": case "晚上": case "evening": return 13000L;
+            case "midnight": case "午夜": case "深夜": return 18000L;
+        }
+        if (k.startsWith("+") || k.startsWith("-")) {
+            try { long d = Long.parseLong(k); return (current + d) % 24000L; } catch (Exception ignore) {}
+        }
+        if (k.matches("^\\d{1,5}$")) {
+            long v = Long.parseLong(k);
+            if (v >= 0 && v < 24000) return v;
+        }
+        if (k.matches("^\\d{1,2}:\\d{2}$")) {
+            String[] parts = k.split(":");
+            int hh = Integer.parseInt(parts[0]);
+            int mm = Integer.parseInt(parts[1]);
+            // Simple linear mapping: 00:00 -> 18000? Here we use: 00:00 -> 18000 (midnight), 12:00 -> 6000 (noon)
+            // But for intuitiveness, here we use a daytime proportional mapping: 00:00 -> 18000, 06:00 -> 0, 12:00 -> 6000, 18:00 -> 12000
+            int totalMin = (hh % 24) * 60 + Math.min(59, Math.max(0, mm));
+            double ratio = totalMin / (24.0 * 60.0);
+            long tod = (long) Math.floor(ratio * 24000.0);
+            return tod;
+        }
+        return null;
+    }
+
+    private String timeKey(long t) {
+        if (t < 1000) return "sunrise";
+        if (t < 6000) return "day";
+        if (t < 12000) return "noon";
+        if (t < 13000) return "sunset";
+        if (t < 18000) return "night";
         return "midnight";
     }
-    
-    private ServerWorld getTargetWorld(String worldName) {
-        if (worldName == null || worldName.isEmpty()) {
-            return null;
-        }
-        
-        String lower = worldName.toLowerCase().trim();
-        switch (lower) {
-            case "overworld":
-            case "主世界":
-            case "地上":
-                return server.getWorld(World.OVERWORLD);
-            case "nether":
-            case "下界":
-            case "地狱":
-                return server.getWorld(World.NETHER);
-            case "end":
-            case "末地":
-            case "末路之地":
-                return server.getWorld(World.END);
-            default:
-                return null;
+
+    // Round to 3 decimals for gradients
+    private static double round3(double v) { return Math.round(v * 1000.0) / 1000.0; }
+
+    /** Try to read clear/rain/thunder remaining ticks via reflection (mapping-friendly). */
+    private void addWeatherTimesIfAvailable(com.google.gson.JsonObject res, ServerWorld world) {
+        try {
+            Object props = world.getLevelProperties(); // type varies across mappings
+            Integer clear = tryCallInt(props, "getClearWeatherTime");
+            Integer rain = tryCallInt(props, "getRainTime");
+            Integer thunder = tryCallInt(props, "getThunderTime");
+            if (clear != null)   res.addProperty("clearWeatherTimeTicks", clear);
+            if (rain != null)    res.addProperty("rainTimeTicks", rain);
+            if (thunder != null) res.addProperty("thunderTimeTicks", thunder);
+            AusukaAiMod.LOGGER.debug("{} [world_state] weatherTimes clear={} rain={} thunder={}",
+                    RequestContext.midTag(), clear, rain, thunder);
+        } catch (Throwable ignore) {
+            // silently skip if not available in this mapping
         }
     }
-    
-    private String getWorldDisplayName(ServerWorld world) {
-        if (world.getRegistryKey() == World.OVERWORLD) return "主世界";
-        if (world.getRegistryKey() == World.NETHER) return "下界";
-        if (world.getRegistryKey() == World.END) return "末地";
-        return world.getRegistryKey().getValue().toString();
+
+    private Integer tryCallInt(Object obj, String method) {
+        try {
+            java.lang.reflect.Method m = obj.getClass().getMethod(method);
+            Object v = m.invoke(obj);
+            if (v instanceof Integer) return (Integer) v;
+        } catch (Throwable ignored) {}
+        return null;
     }
-    
-    private void runOnMainAndWait(Runnable task) {
-        if (server.isOnThread()) {
-            task.run();
-            return;
+
+
+
+    /* world helpers */
+
+    private ServerWorld worldFromAny(String s) {
+        if (s == null || s.isBlank()) return null;
+        String k = s.trim().toLowerCase(Locale.ROOT);
+        if (k.contains("overworld") || k.contains("主世界") || k.contains("地上")) return server.getWorld(World.OVERWORLD);
+        if (k.contains("nether") || k.contains("下界") || k.contains("地狱")) return server.getWorld(World.NETHER);
+        if (k.contains("end") || k.contains("末地") || k.contains("末路之地")) return server.getWorld(World.END);
+        Identifier id = Identifier.tryParse(s.trim());
+        if (id != null) {
+            RegistryKey<World> key = RegistryKey.of(RegistryKeys.WORLD, id);
+            return server.getWorld(key);
         }
-        CountDownLatch latch = new CountDownLatch(1);
-        server.execute(() -> {
-            try { task.run(); } finally { latch.countDown(); }
-        });
-        try { latch.await(); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+        return null;
+    }
+
+    /* JSON helpers */
+
+    private String jsonError(String code, String message) {
+        JsonObject o = new JsonObject();
+        o.addProperty("ok", false);
+        o.addProperty("code", code);
+        o.addProperty("message", message);
+        return GSON.toJson(o);
     }
 }

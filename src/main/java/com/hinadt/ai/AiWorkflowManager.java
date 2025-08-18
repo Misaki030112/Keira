@@ -71,7 +71,7 @@ public class AiWorkflowManager {
             // Server-side logging: record latency to diagnose slow requests
             long start = System.currentTimeMillis();
             AusukaAiMod.LOGGER.info("AI request start: player={}, msg='{}'", playerName, message);
-            AusukaAiMod.LOGGER.debug("{} [workflow] Context ready before AI call tools=[items, give, tp, memory, weather, stats, world, admin] sysPromptLen={}", RequestContext.midTag(), systemPrompt.length());
+            AusukaAiMod.LOGGER.debug("{} [workflow] Context ready before AI call tools=[items, give, tp, memory, weather, effects, stats, world, admin] sysPromptLen={}", RequestContext.midTag(), systemPrompt.length());
 
             String aiResponse = AiRuntime.AIClient
                     .prompt()
@@ -83,6 +83,7 @@ public class AiWorkflowManager {
                             tools.teleportTools,
                             tools.memoryTools,
                             tools.weatherTools,
+                            tools.statusEffectTools,
                             tools.playerStatsTools,
                             tools.worldAnalysisTools,
                             tools.adminTools
@@ -105,6 +106,89 @@ public class AiWorkflowManager {
 
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("Error processing player message: " + e.getMessage(), e);
+            return "😅 Sorry, I hit a technical issue handling your request. Please try again later or rephrase.";
+        } finally {
+            RequestContext.clear();
+        }
+    }
+
+    /**
+     * Process a single-turn message without using or updating conversation history.
+     * - No conversation context
+     * - Does not save user/AI messages to memory
+     * - Still respects permissions, tools availability, and reply language
+     */
+    public String processSingleTurnMessage(ServerPlayerEntity player, String message, String messageId) {
+        try {
+            RequestContext.setMessageId(messageId);
+            if (!AiRuntime.isReady()) {
+                return "⚠️ AI is not configured or unavailable. Configure API key and retry.";
+            }
+            String playerName = player.getName().getString();
+
+            // Context (no conversation history)
+            String detailedContext = contextBuilder.build(player);
+            String conversationContext = ""; // explicitly empty for one-shot
+            boolean isAdmin = AdminTools.isPlayerAdmin(server, player);
+            String permissionContext = isAdmin ?
+                    "Player has admin privileges; risky operations permitted." :
+                    "Player is a regular user; risky operations require permission and will be denied.";
+
+            // No player memory context for one-shot; keep server/tool context
+            String memoryContext = "(memory disabled for one-shot)";
+            String serverContext = buildServerContext();
+            String toolAvailability = buildToolAvailability(isAdmin);
+
+            String clientLocale = PlayerLanguageCache.code(player);
+
+            String systemPrompt = promptComposer.composeSystemPrompt(
+                    player,
+                    detailedContext,
+                    conversationContext,
+                    permissionContext,
+                    isAdmin,
+                    memoryContext,
+                    serverContext,
+                    toolAvailability,
+                    clientLocale
+            );
+
+            long start = System.currentTimeMillis();
+            AusukaAiMod.LOGGER.info("AI one-shot start: player={}, msg='{}'", playerName, message);
+            AusukaAiMod.LOGGER.debug("{} [one-shot] Context ready sysPromptLen={}", RequestContext.midTag(), systemPrompt.length());
+
+            String aiResponse = AiRuntime.AIClient
+                    .prompt()
+                    .system(systemPrompt)
+                    .user(message)
+                    .tools(
+                            tools.itemSearchTool,
+                            tools.giveItemTool,
+                            tools.teleportTools,
+                            tools.memoryTools,
+                            tools.weatherTools,
+                            tools.statusEffectTools,
+                            tools.playerStatsTools,
+                            tools.worldAnalysisTools,
+                            tools.adminTools
+                    )
+                    .call()
+                    .content();
+
+            long cost = System.currentTimeMillis() - start;
+            if (cost > 8000) {
+                AusukaAiMod.LOGGER.warn("AI one-shot done (slow): player={}, cost={}ms", playerName, cost);
+            } else {
+                AusukaAiMod.LOGGER.info("AI one-shot done: player={}, cost={}ms", playerName, cost);
+            }
+            int respLen = aiResponse == null ? 0 : aiResponse.length();
+            String preview = aiResponse == null ? "" : aiResponse.substring(0, Math.min(180, aiResponse.length())).replaceAll("\n", " ");
+            AusukaAiMod.LOGGER.debug("{} [one-shot] AI response len={}, preview='{}'", RequestContext.midTag(), respLen, preview);
+
+            return aiResponse;
+
+        } catch (Exception e) {
+            AusukaAiMod.LOGGER.error("Error processing one-shot message: " + e.getMessage(), e);
             return "😅 Sorry, I hit a technical issue handling your request. Please try again later or rephrase.";
         } finally {
             RequestContext.clear();

@@ -3,42 +3,45 @@ package com.hinadt.mixin;
 import com.hinadt.AusukaAiMod;
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.persistence.PlayerTelemetryRecorder;
-import net.minecraft.network.ClientConnection;
 import com.hinadt.util.Messages;
 import com.hinadt.util.PlayerLanguageCache;
+import net.minecraft.network.ClientConnection;
 import net.minecraft.server.PlayerManager;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.network.ConnectedClientData;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.Objects;
 
 @Mixin(PlayerManager.class)
 public class PlayerJoinMixin {
     
     @Inject(method = "onPlayerConnect", at = @At("TAIL"))
     private void onPlayerJoin(ClientConnection connection, ServerPlayerEntity player, ConnectedClientData clientData, CallbackInfo ci) {
-        // 记录玩家加入时的客户端信息（语言、IP等）
+        // Record the client information when the player joins (language, IP, etc.)
         try {
             PlayerTelemetryRecorder.recordJoin(player, connection, clientData);
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.warn("记录玩家连接信息出错: " + e.getMessage());
+            AusukaAiMod.LOGGER.warn("Error recording player connection information: " + e.getMessage());
         }
 
-        // 缓存玩家语言（仅在加入/设置变更时更新）
+        // Cache player language (only updated on join/settings change)
         try {
             PlayerLanguageCache.update(player);
         } catch (Exception e) {
-            AusukaAiMod.LOGGER.warn("缓存玩家语言失败: " + e.getMessage());
+            AusukaAiMod.LOGGER.warn("Failed to cache player language: " + e.getMessage());
         }
-        // 延迟发送AI生成的欢迎消息
-        player.getServer().execute(() -> {
+        // Delay sending the AI generated welcome message
+        Objects.requireNonNull(player.getServer()).execute(() -> {
             try {
-                Thread.sleep(2000); // 等待2秒确保玩家完全加载
-                
-                // 发送AI生成的欢迎消息（AI 提示为英文，回复语言依据缓存）
+                Thread.sleep(2000); // Wait 2 seconds to ensure the player is fully loaded
+
+                // Send an AI-generated welcome message (AI prompts are in English, and the reply language is based on the cache)
                 generateAiWelcomeMessage(player);
                 
             } catch (InterruptedException e) {
@@ -47,6 +50,7 @@ public class PlayerJoinMixin {
         });
     }
     
+    @Unique
     private void generateAiWelcomeMessage(ServerPlayerEntity player) {
         try {
             String playerName = player.getName().getString();
@@ -71,7 +75,7 @@ public class PlayerJoinMixin {
             
             String welcomeMessage;
             if (!AiRuntime.isReady()) {
-                throw new IllegalStateException("AI未配置");
+                throw new IllegalStateException("AI not configured");
             }
 
             welcomeMessage = AiRuntime.AIClient
@@ -84,13 +88,13 @@ public class PlayerJoinMixin {
             Messages.to(player, Text.translatable("ausuka.ai.reply", welcomeMessage));
             Messages.to(player, Text.translatable("ausuka.welcome.help"));
             
-            AusukaAiMod.LOGGER.info("已为玩家 {} 发送AI生成的欢迎消息", playerName);
+            AusukaAiMod.LOGGER.info("Sent AI generated welcome message for player {}", playerName);
             
         } catch (Exception e) {
-            // 如果AI生成失败，使用多语言兜底
+            // If AI generation fails, use multi-language as a fallback
             Messages.to(player, Text.translatable("ausuka.welcome.fallback", player.getName().getString()));
             
-            AusukaAiMod.LOGGER.warn("AI欢迎消息生成失败，使用备用消息: " + e.getMessage());
+            AusukaAiMod.LOGGER.warn("AI welcome message generation failed, using fallback message: " + e.getMessage());
         }
     }
 }

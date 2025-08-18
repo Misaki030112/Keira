@@ -63,11 +63,23 @@ dependencies {
         exclude group: 'com.fasterxml.jackson.core'
         exclude group: 'com.fasterxml.jackson.datatype'
     }
+    implementation("org.springframework.ai:spring-ai-openai") {
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'com.fasterxml.jackson.datatype'
+    }
+    implementation("org.springframework.ai:spring-ai-anthropic") {
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'com.fasterxml.jackson.datatype'
+    }
 
     // 3) Spring AI 基础模块（显式引入以避免运行时缺类）
     implementation("org.springframework.ai:spring-ai-model")
     implementation("org.springframework.ai:spring-ai-commons")
     implementation("org.springframework.ai:spring-ai-retry")
+    // Spring Retry (required by spring-ai-retry & DeepSeekApi builder)
+    implementation("org.springframework.retry:spring-retry:2.0.6")
+    implementation "org.springframework.ai:spring-ai-template-st:1.0.1"
+
 
     // Spring Framework 运行时（与 Spring AI 1.0.1 匹配的 6.2.x）
     implementation("org.springframework:spring-core:6.2.7")
@@ -82,6 +94,8 @@ dependencies {
 
     // （可选）流式需要 Reactor
     implementation "io.projectreactor:reactor-core:3.7.6"
+    implementation "org.reactivestreams:reactive-streams:1.0.4"
+
 
     // 嵌入式数据库支持 (H2)
     implementation "com.h2database:h2:2.2.224"
@@ -99,12 +113,24 @@ dependencies {
     implementation "com.fasterxml.jackson.core:jackson-databind"
     implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310"
 
-	// Fabric 打包：把这些依赖打进 mod（Jar-in-Jar）
+    implementation "com.fasterxml:classmate:1.6.0"
+    implementation "org.springframework:spring-jcl:6.2.7"
+
+
+    // Fabric 打包：把这些依赖打进 mod（Jar-in-Jar）
     include("org.springframework.ai:spring-ai-client-chat:1.0.1") {
         exclude group: 'com.fasterxml.jackson.core'
         exclude group: 'com.fasterxml.jackson.datatype'
     }
     include("org.springframework.ai:spring-ai-deepseek:1.0.1") {
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'com.fasterxml.jackson.datatype'
+    }
+    include("org.springframework.ai:spring-ai-openai:1.0.1"){
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'com.fasterxml.jackson.datatype'
+    }
+    include("org.springframework.ai:spring-ai-anthropic:1.0.1") {
         exclude group: 'com.fasterxml.jackson.core'
         exclude group: 'com.fasterxml.jackson.datatype'
     }
@@ -123,8 +149,12 @@ dependencies {
     include("org.springframework:spring-webflux:6.2.7")
     include("org.springframework:spring-context-support:6.2.7")
 
+    include("org.springframework.retry:spring-retry:2.0.6")
+    include("org.springframework.ai:spring-ai-template-st:1.0.1")
+
     // Reactor and Micrometer
     include("io.projectreactor:reactor-core:3.7.6")
+    include("org.reactivestreams:reactive-streams:1.0.4")
     include("io.micrometer:micrometer-core:1.15.0")
     include("io.micrometer:micrometer-commons:1.15.0")
     include("io.micrometer:micrometer-observation:1.15.0")
@@ -147,6 +177,10 @@ dependencies {
     include("com.fasterxml.jackson.core:jackson-annotations:2.19.0")
     include("com.fasterxml.jackson.core:jackson-databind:2.19.0")
     include("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.19.0")
+    include("com.fasterxml:classmate:1.6.0")
+    include       "org.springframework:spring-jcl:6.2.7"
+
+
 }
 
 // Test dependencies

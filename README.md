@@ -19,7 +19,7 @@ Ausuka.ai is a Fabric mod that brings an AI chat assistant to Minecraft. Use nat
 - Admin: `/ai admin auto-msg toggle|status|personal <player> <on|off>`, `/ai admin stats`.
 
 ## Tech Stack
-- Fabric 1.21.1, Java 21.
+- Fabric 1.21.8, Java 21.
 - Spring AI Client Chat + DeepSeek (single-call + tool calls).
 - MyBatis 3 + H2 (persistent sessions, conversations, and locations).
 - Async handling with main-thread dispatch for safety.

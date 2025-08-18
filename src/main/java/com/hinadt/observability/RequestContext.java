@@ -3,10 +3,10 @@ package com.hinadt.observability;
 import org.slf4j.MDC;
 
 /**
- * 观测性请求上下文
- * - 使用 ThreadLocal 存放本次用户消息对应的 messageId
- * - 通过 MDC 注入日志上下文（若日志配置支持）
- * - 提供统一的日志前缀，便于在日志中检索溯源
+ * Observable request context
+ * - Use ThreadLocal to store the messageId corresponding to the current user message
+ * - Inject the logging context via MDC (if supported by the logging configuration)
+ * - Provide a unified log prefix to facilitate retrieval and tracing in logs
  */
 public final class RequestContext {
     private static final ThreadLocal<String> MESSAGE_ID = new ThreadLocal<>();
@@ -31,7 +31,7 @@ public final class RequestContext {
     }
 
     /**
-     * 返回标准日志前缀，例如：[mid=xxxx]
+     * Returns the standard log prefix, for example: [mid=xxxx]
      */
     public static String midTag() {
         String mid = getMessageId();

@@ -21,6 +21,8 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.hinadt.AusukaAiMod;
+import com.hinadt.observability.RequestContext;
 
 public class ItemSearchTool {
 
@@ -94,6 +96,9 @@ public class ItemSearchTool {
             @ToolParam(description = "Max results, default 50, range 1..200.") Integer limit,
             @ToolParam(description = "Offset for pagination, default 0.") Integer offset
     ) {
+        long startNanos = System.nanoTime();
+        AusukaAiMod.LOGGER.debug("{} [tool:search_items] params query='{}' limit={} offset={}",
+                RequestContext.midTag(), query, limit, offset);
         // -------- 1) Normalize inputs --------
         final String raw = (query == null) ? "" : query.trim();
         final String q = raw.toLowerCase(Locale.ROOT);
@@ -163,6 +168,10 @@ public class ItemSearchTool {
             final CachedItem it = buf.get(i).it;
             out.add(new ItemEntry(it.id, it.ns, it.path, it.name, it.maxStack, new ArrayList<>(it.tags)));
         }
+        long costMs = (System.nanoTime() - startNanos) / 1_000_000L;
+        String preview = out.stream().limit(3).map(ItemEntry::id).collect(Collectors.joining(", "));
+        AusukaAiMod.LOGGER.info("{} [tool:search_items] done count={} cost={}ms preview=[{}]",
+                RequestContext.midTag(), out.size(), costMs, preview);
         return out;
     }
 
