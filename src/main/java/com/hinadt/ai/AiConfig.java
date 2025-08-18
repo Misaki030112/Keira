@@ -3,6 +3,7 @@ package com.hinadt.ai;
 import com.hinadt.AusukaAiMod;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.dedicated.AbstractPropertiesHandler;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -67,20 +68,20 @@ public final class AiConfig {
         // Environment variable (accept both exact and upper-case variants)
         v = System.getenv(key);
         if (v != null && !v.isEmpty()) return v;
-        v = System.getenv(key.toUpperCase(Locale.ROOT));
+        v = System.getenv(key.toLowerCase(Locale.ROOT));
         if (v != null && !v.isEmpty()) return v;
         // Config file
         load();
         if (props == null) return null;
         v = props.getProperty(key);
         if (v != null && !v.isEmpty()) return v;
-        v = props.getProperty(key.toUpperCase(Locale.ROOT));
+        v = props.getProperty(key.toLowerCase(Locale.ROOT));
         if (v != null && !v.isEmpty()) return v;
 
         // server.properties (lowest priority)
         v = fromServerProperties(key);
         if (v != null && !v.isEmpty()) return v;
-        v = fromServerProperties(key.toUpperCase(Locale.ROOT));
+        v = fromServerProperties(key.toLowerCase(Locale.ROOT));
         return (v == null || v.isEmpty()) ? null : v;
     }
 
@@ -96,48 +97,21 @@ public final class AiConfig {
     // --- internals ---
 
     /**
-     * Resolve a value from server.properties using Minecraft's own property holder if available.
-     * Avoids manual parsing by reflectively accessing dedicated server properties.
+     * Resolve a value from server.properties using the official API for the current version (Yarn 1.21.8).
+     * We do not use reflection; instead we load the file through AbstractPropertiesHandler to ensure parity.
      */
     private static String fromServerProperties(String key) {
         MinecraftServer srv = attachedServer;
         if (srv == null) return null;
+        // Only dedicated servers maintain a server.properties file
+        if (!srv.isDedicated()) return null;
         try {
-            // Dedicated server typically exposes a getProperties() returning DedicatedServerProperties
-            Object dedicatedProps = tryInvokeNoArg(srv, "getProperties");
-            if (dedicatedProps != null) {
-                // Try a field named 'properties' of type java.util.Properties
-                Properties p = tryGetPropertiesField(dedicatedProps);
-                if (p != null) return p.getProperty(key);
-                // Or a no-arg method returning Properties
-                Object maybeProps = tryInvokeNoArg(dedicatedProps, "getProperties");
-                if (maybeProps instanceof Properties props) return props.getProperty(key);
-                // Some versions might keep a raw map
-                Object raw = tryInvokeNoArg(dedicatedProps, "rawProperties");
-                if (raw instanceof Properties props2) return props2.getProperty(key);
-            }
-        } catch (Throwable ignored) {
-        }
-        return null;
-    }
-
-    private static Object tryInvokeNoArg(Object target, String method) {
-        try {
-            var m = target.getClass().getMethod(method);
-            m.setAccessible(true);
-            return m.invoke(target);
-        } catch (ReflectiveOperationException e) {
-            return null;
-        }
-    }
-
-    private static Properties tryGetPropertiesField(Object holder) {
-        try {
-            var f = holder.getClass().getDeclaredField("properties");
-            f.setAccessible(true);
-            Object v = f.get(holder);
-            return (v instanceof Properties p) ? p : null;
-        } catch (ReflectiveOperationException e) {
+            Path runDirectory = srv.getRunDirectory();
+            Properties properties = AbstractPropertiesHandler.loadProperties(runDirectory.resolve("server.properties"));
+            return properties.getProperty(key);
+        } catch (Throwable t) {
+            // Use debug level to avoid noisy logs; this is a best-effort fallback
+            AusukaAiMod.LOGGER.debug("Failed to read server.properties for key '{}': {}", key, t.toString());
             return null;
         }
     }

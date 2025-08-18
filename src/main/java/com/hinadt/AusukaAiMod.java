@@ -1,19 +1,18 @@
 package com.hinadt;
 
+import com.hinadt.ai.AiConfig;
 import com.hinadt.ai.AiRuntime;
 import com.hinadt.chat.AiChatSystem;
-import com.hinadt.util.Messages;
+import com.hinadt.chat.IntelligentAutoMessageSystem;
 import com.hinadt.command.AiCommandRegistry;
 import com.hinadt.command.core.AiServices;
-import com.hinadt.chat.IntelligentAutoMessageSystem;
+import com.hinadt.util.Messages;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-
+import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import net.minecraft.text.Text;
 
-@SuppressWarnings("resource")
 public class AusukaAiMod implements ModInitializer {
     public static final String MOD_ID = "ausuka-ai-mod";
 
@@ -42,7 +41,11 @@ public class AusukaAiMod implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			LOGGER.info("🚀 Server started, initializing AI-driven system...");
 			try {
-				// Initialize AI runtime
+				// Attach server to config first so server.properties participates in resolution
+				AiConfig.attachServer(server);
+				LOGGER.debug("🔧 Attached server to AI config for property resolution");
+
+				// Initialize AI runtime (reads config with server.properties available)
 				AiRuntime.init();
 				LOGGER.info("✅ AI runtime initialized");
 
