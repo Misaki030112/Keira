@@ -1,40 +1,45 @@
+<p align="center">
+  <img src="src/main/resources/assets/ausuka-ai-mod/icon.png" alt="Ausuka.ai" width="128"/>
+</p>
+
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/Language-English-blue?style=flat-square" alt="English"/></a>
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/语言-简体中文-green?style=flat-square" alt="简体中文"/></a>
+</p>
+
 # Ausuka.ai (Fabric Mod)
 
----
+Ausuka.ai is an in‑game AI assistant for Minecraft — a friendly “Jarvis”-like companion that understands what you say and helps you play, build, explore, and manage your world.
 
-## Overview
-Ausuka.ai is a Fabric mod that brings an AI chat assistant to Minecraft. Use natural language to get items, teleport, control environment, or ask for contextual tips. It supports i18n, admin controls, and persistent storage.
+Community server: 114.67.97.163:25565 (Fabric 1.21.8, whitelist on, online‑mode off).
 
-## Highlights
-- Smart chat and one-shot Q&A: `/ai chat`, `/ai say <message>`.
-- Conversation and memory: `/ai new` resets context; conversations and locations are persisted.
-- Auto messages: scheduled broadcast and personal tips (admin-controllable).
-- Admin commands: `/ai admin auto-msg ...`, `/ai admin stats` for system stats.
-- Unified permissions: USER / MOD_ADMIN / SERVER_ADMIN (OP/SP is SERVER_ADMIN).
-- DB-backed sessions: AI chat mode state survives restarts.
-- I18N: auto language selection (zh_cn / en_us).
+<p>
+  <a href="https://t.me/AusukaMisaki"><img src="https://img.shields.io/badge/Telegram-@AusukaMisaki-27A1E3?logo=telegram&style=flat-square" alt="Telegram"/></a>
+  <a href="https://weixin.qq.com/"><img src="https://img.shields.io/badge/WeChat-Misaki030112-07C160?logo=wechat&style=flat-square" alt="WeChat"/></a>
+</p>
+
+## What It Can Do
+- Chat naturally and get concise, localized replies.
+- Help with survival basics: finding resources, travel and navigation, weather/time, clearing negative effects, quick recovery.
+- Assist building and exploration: suggest ideas, mark and recall important locations, offer world context.
+- Light server guidance: gentle reminders, tips, and optional moderation aids for admins.
 
 ## Quick Start
-- Basics: `/ai help`, `/ai chat`, `/ai say <message>`, `/ai exit`, `/ai new`, `/ai status`.
-- Admin: `/ai admin auto-msg toggle|status|personal <player> <on|off>`, `/ai admin stats`.
+- Requirements: Fabric 1.21.8, Fabric API, Java 21
+- Client (PCL):
+  1) Create a Fabric 1.21.8 instance in PCL (PCL2)
+  2) Put Fabric API and this mod jar into that instance’s `mods/`
+  3) Launch and use `/ai help`, `/ai chat`, or `/ai say <message>`
+- Dedicated server:
+  1) Install Fabric Loader 1.21.8 and Fabric API
+  2) Drop the mod jar into `mods/`
+  3) Start with Java 21
 
-## Tech Stack
-- Fabric 1.21.8, Java 21.
-- Spring AI Client Chat + DeepSeek (single-call + tool calls).
-- MyBatis 3 + H2 (persistent sessions, conversations, and locations).
-- Async handling with main-thread dispatch for safety.
-- Mod ID: `ausuka-ai-mod`
+## Configure (Short & Simple)
+- Set your AI key once. Easiest: create `<.minecraft>/config/ausuka-ai-mod.properties` and put your key in it.
+- Works with mainstream providers. You can also use environment variables or JVM args if you prefer.
+- Replies follow each player’s client language; the server language is `en_us`.
 
-## Install & Config
-- Requires Fabric Loader, Fabric API, Java 21.
-- Provide an API key via one of the following (priority order):
-  1) JVM arg: `-DDEEPSEEK_API_KEY=...`
-  2) Env var: `DEEPSEEK_API_KEY=...`
-  3) Config file: create `<.minecraft>/config/ausuka-ai-mod.properties` with:
-     - `DEEPSEEK_API_KEY=your_key_here`
-     - Optional: `AI_PROVIDER=deepseek`
-  4) server.properties: add `DEEPSEEK_API_KEY=your_key_here`
-
-- Windows (single-player): using a config file is recommended because the Minecraft Launcher may not pass env vars to the game. Create `%APPDATA%/.minecraft/config/ausuka-ai-mod.properties` and put your key there.
-
-- Drop the built jar into `mods/` and launch.
+## Notes
+- Designed to be safe for servers and friendly for players.
+- Sessions and memories persist across restarts.
