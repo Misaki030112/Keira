@@ -1,22 +1,17 @@
-<p align="center">
-  <img src="src/main/resources/assets/ausuka-ai-mod/icon.png" alt="Ausuka.ai" width="128"/>
-</p>
-
-<p align="center">
-  <a href="README.md"><img src="https://img.shields.io/badge/Language-English-blue?style=flat-square" alt="English"/></a>
-  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/语言-简体中文-green?style=flat-square" alt="简体中文"/></a>
-</p>
-
 # Ausuka.ai (Fabric Mod)
+
+<img src="src/main/resources/assets/ausuka-ai-mod/icon.png" alt="Ausuka.ai" width="120"/>
+
+<a href="README.md"><img src="https://img.shields.io/badge/Language-English-blue?style=flat-square" alt="English"/></a>
+<a href="README.zh-CN.md"><img src="https://img.shields.io/badge/语言-简体中文-green?style=flat-square" alt="简体中文"/></a>
 
 Ausuka.ai is an in‑game AI assistant for Minecraft — a friendly “Jarvis”-like companion that understands what you say and helps you play, build, explore, and manage your world.
 
-Community server: 114.67.97.163:25565 (Fabric 1.21.8, whitelist on, online‑mode off).
+Community server: `114.67.97.163:25565` (Fabric 1.21.8, whitelist on, online‑mode off).
 
-<p>
-  <a href="https://t.me/AusukaMisaki"><img src="https://img.shields.io/badge/Telegram-@AusukaMisaki-27A1E3?logo=telegram&style=flat-square" alt="Telegram"/></a>
-  <a href="https://weixin.qq.com/"><img src="https://img.shields.io/badge/WeChat-Misaki030112-07C160?logo=wechat&style=flat-square" alt="WeChat"/></a>
-</p>
+<a href="https://t.me/AusukaMisaki"><img src="https://img.shields.io/badge/Telegram-@AusukaMisaki-27A1E3?logo=telegram&style=flat-square" alt="Telegram"/></a>
+<a href="https://weixin.qq.com/"><img src="https://img.shields.io/badge/WeChat-Misaki030112-07C160?logo=wechat&style=flat-square" alt="WeChat"/></a>
+<a><img src="https://img.shields.io/badge/Server-114.67.97.163%3A25565-7A39FF?logo=minecraft&style=flat-square" alt="Server 114.67.97.163:25565"/></a>
 
 ## What It Can Do
 - Chat naturally and get concise, localized replies.
