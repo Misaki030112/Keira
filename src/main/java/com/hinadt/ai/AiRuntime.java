@@ -18,6 +18,7 @@ import org.springframework.ai.openai.api.OpenAiApi;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * AI runtime system - supports multiple AI model providers
@@ -29,6 +30,8 @@ public final class AiRuntime {
     private static ModAdminSystem modAdminSystem;
     // Dedicated pool for AI work to avoid ForkJoin common pool starvation
     public static ExecutorService AI_EXECUTOR;
+    // Lightweight scheduler for timeouts and delayed operations
+    private static ScheduledExecutorService AI_SCHEDULER;
     
     /**
      * Supported AI provider types
@@ -77,6 +80,16 @@ public final class AiRuntime {
             AI_EXECUTOR = Executors.newFixedThreadPool(4, r -> {
                 Thread t = new Thread(r);
                 t.setName("ausuka-ai-worker");
+                t.setDaemon(true);
+                return t;
+            });
+        }
+
+        // Init a single-thread scheduler for timeouts
+        if (AI_SCHEDULER == null || AI_SCHEDULER.isShutdown()) {
+            AI_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r);
+                t.setName("ausuka-ai-scheduler");
                 t.setDaemon(true);
                 return t;
             });
@@ -266,6 +279,10 @@ public final class AiRuntime {
             AI_EXECUTOR.shutdownNow();
             AI_EXECUTOR = null;
         }
+        if (AI_SCHEDULER != null) {
+            AI_SCHEDULER.shutdownNow();
+            AI_SCHEDULER = null;
+        }
         if (conversationMemory != null) {
             conversationMemory.shutdown();
         }
@@ -280,5 +297,12 @@ public final class AiRuntime {
      */
     public static boolean isReady() {
         return AIClient != null;
+    }
+
+    /**
+     * Scheduler accessor for timeout tasks.
+     */
+    public static ScheduledExecutorService scheduler() {
+        return AI_SCHEDULER;
     }
 }

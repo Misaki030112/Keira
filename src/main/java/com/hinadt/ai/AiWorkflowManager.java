@@ -9,6 +9,7 @@ import com.hinadt.tools.AdminTools;
 import com.hinadt.util.PlayerLanguageCache;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import java.util.concurrent.CancellationException;
 
 
 public class AiWorkflowManager {
@@ -33,6 +34,10 @@ public class AiWorkflowManager {
             RequestContext.setMessageId(messageId);
             if (!AiRuntime.isReady()) {
                 return "⚠️ AI is not configured or unavailable. Configure API key and retry.";
+            }
+            // Honor cooperative cancellation early
+            if (Thread.currentThread().isInterrupted()) {
+                throw new CancellationException("AI task cancelled before start");
             }
             String playerName = player.getName().getString();
 
@@ -73,6 +78,11 @@ public class AiWorkflowManager {
             AusukaAiMod.LOGGER.info("{} AI request start: player={}, msg='{}'",RequestContext.midTag() , playerName, message);
             AusukaAiMod.LOGGER.debug("{} [workflow] Context ready before AI call  sysPrompt='''\n{}\n'''", RequestContext.midTag(), systemPrompt);
 
+            // Check cancellation before making a potentially long blocking network call
+            if (Thread.currentThread().isInterrupted()) {
+                throw new CancellationException("AI task cancelled before network call");
+            }
+
             String aiResponse = AiRuntime.AIClient
                     .prompt()
                     .system(systemPrompt)
@@ -104,6 +114,9 @@ public class AiWorkflowManager {
             memorySystem.saveAiResponse(playerName, aiResponse);
             return aiResponse;
 
+        } catch (CancellationException e) {
+            // Propagate cooperative cancellation without noisy logs
+            throw e;
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("Error processing player message: " + e.getMessage(), e);
             return "😅 Sorry, I hit a technical issue handling your request. Please try again later or rephrase.";
@@ -123,6 +136,9 @@ public class AiWorkflowManager {
             RequestContext.setMessageId(messageId);
             if (!AiRuntime.isReady()) {
                 return "⚠️ AI is not configured or unavailable. Configure API key and retry.";
+            }
+            if (Thread.currentThread().isInterrupted()) {
+                throw new CancellationException("AI one-shot cancelled before start");
             }
             String playerName = player.getName().getString();
 
@@ -157,6 +173,10 @@ public class AiWorkflowManager {
             AusukaAiMod.LOGGER.info("AI one-shot start: player={}, msg='{}'", playerName, message);
             AusukaAiMod.LOGGER.debug("{} [one-shot] Context ready sysPromptLen={}", RequestContext.midTag(), systemPrompt.length());
 
+            if (Thread.currentThread().isInterrupted()) {
+                throw new CancellationException("AI one-shot cancelled before network call");
+            }
+
             String aiResponse = AiRuntime.AIClient
                     .prompt()
                     .system(systemPrompt)
@@ -188,6 +208,8 @@ public class AiWorkflowManager {
 
             return aiResponse;
 
+        } catch (CancellationException e) {
+            throw e;
         } catch (Exception e) {
             AusukaAiMod.LOGGER.error("Error processing one-shot message: " + e.getMessage(), e);
             return "😅 Sorry, I hit a technical issue handling your request. Please try again later or rephrase.";

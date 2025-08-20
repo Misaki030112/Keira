@@ -5,6 +5,7 @@ import com.hinadt.ai.AiRuntime;
 import com.hinadt.ai.ModAdminSystem;
 import com.hinadt.command.core.AiServices;
 import com.hinadt.command.core.Permissions;
+import com.hinadt.util.Async;
 import com.hinadt.util.Messages;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -14,7 +15,9 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import static net.minecraft.server.command.CommandManager.argument;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
 public final class ChatCommands {
@@ -130,24 +133,33 @@ public final class ChatCommands {
         }
         String msg = StringArgumentType.getString(ctx, "message");
         String messageId = UUID.randomUUID().toString();
-        CompletableFuture
-            .supplyAsync(() -> AiServices.workflow().processSingleTurnMessage(player, msg, messageId),
-                    AiRuntime.AI_EXECUTOR)
-            .orTimeout(60, TimeUnit.SECONDS)
-            .whenComplete((response, ex) -> {
-                if (ex != null) {
-                    AusukaAiMod.LOGGER.warn("[mid={}] /ai say timed out or failed: {}", messageId, ex.toString());
+        CompletableFuture<String> task = Async.supplyAsyncWithTimeout(
+                () -> AiServices.workflow().processSingleTurnMessage(player, msg, messageId),
+                AiRuntime.AI_EXECUTOR,
+                120, TimeUnit.SECONDS
+        );
+
+        task.whenComplete((response, ex) -> {
+            if (ex != null) {
+                Throwable cause = (ex instanceof CompletionException && ex.getCause() != null)
+                        ? ex.getCause() : ex;
+                if (cause instanceof CancellationException) {
+                    AusukaAiMod.LOGGER.warn("[mid={}] /ai say timed out and was cancelled", messageId);
                     AiServices.server().execute(() -> Messages.to(player, Text.translatable("aim.say.error")));
-                    return;
+                } else {
+                    AusukaAiMod.LOGGER.warn("[mid={}] /ai say failed: {}", messageId, cause.toString());
+                    AiServices.server().execute(() -> Messages.to(player, Text.translatable("aim.say.error")));
                 }
-                String out = (response == null || response.isEmpty())
-                        ? Text.translatable("aim.say.no_response").getString()
-                        : response;
-                String preview = out.substring(0, Math.min(180, out.length())).replaceAll("\n", " ");
-                AusukaAiMod.LOGGER.debug("[mid={}] [/ai say] Sending AI reply to player={}, len={}, preview='{}'",
-                        messageId, player.getName().getString(), out.length(), preview);
-                AiServices.server().execute(() -> Messages.to(player, Text.translatable("ausuka.ai.reply", out)));
-            });
+                return;
+            }
+            String out = (response == null || response.isEmpty())
+                    ? Text.translatable("aim.say.no_response").getString()
+                    : response;
+            String preview = out.substring(0, Math.min(180, out.length())).replaceAll("\n", " ");
+            AusukaAiMod.LOGGER.debug("[mid={}] [/ai say] Sending AI reply to player={}, len={}, preview='{}'",
+                    messageId, player.getName().getString(), out.length(), preview);
+            AiServices.server().execute(() -> Messages.to(player, Text.translatable("ausuka.ai.reply", out)));
+        });
         return 1;
     }
 }

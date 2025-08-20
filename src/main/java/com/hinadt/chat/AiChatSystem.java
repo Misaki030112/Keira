@@ -1,16 +1,19 @@
 package com.hinadt.chat;
 
 import com.hinadt.AusukaAiMod;
-import com.hinadt.command.core.AiServices;
 import com.hinadt.ai.AiRuntime;
+import com.hinadt.command.core.AiServices;
+import com.hinadt.util.Async;
 import com.hinadt.util.Messages;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
-import net.minecraft.text.MutableText;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
-import java.util.UUID;
 
+import java.util.UUID;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -44,28 +47,45 @@ public class AiChatSystem {
         String messageId = UUID.randomUUID().toString();
         AusukaAiMod.LOGGER.debug("[mid={}] [chat] Received player message: player={}, msg='{}'", messageId, playerName, message);
 
-        // Process on dedicated pool with a guard timeout, switch back to main thread to reply
-        CompletableFuture
-            .supplyAsync(() -> AiServices.workflow().processPlayerMessage(player, message, messageId),
-                    AiRuntime.AI_EXECUTOR)
-            .orTimeout(60, TimeUnit.SECONDS)
-            .whenComplete((response, ex) -> {
-                if (ex != null) {
-                    AusukaAiMod.LOGGER.warn("[mid={}] [chat] Message processing failed or timed out: player={}, err={}", messageId, playerName, ex.toString());
+        // Run on dedicated pool and enforce a hard timeout by cancelling the task (interruptible)
+        CompletableFuture<String> task = Async.supplyAsyncWithTimeout(
+                () -> AiServices.workflow().processPlayerMessage(player, message, messageId),
+                AiRuntime.AI_EXECUTOR,
+                120, TimeUnit.SECONDS
+        );
+
+        task.whenComplete((response, ex) -> {
+
+            if (ex != null) {
+                Throwable cause = (ex instanceof CompletionException && ex.getCause() != null)
+                        ? ex.getCause() : ex;
+
+                if (cause instanceof CancellationException) {
+                    // Timeout path
+                    AusukaAiMod.LOGGER.warn("[mid={}] [chat] AI task timed out and was cancelled: player={}", messageId, playerName);
                     AiServices.server().execute(() -> {
                         MutableText t = Text.translatable("ausuka.ai.timeout");
                         Messages.to(player, Text.of("§c").copy().append(t));
                     });
-                    return;
+                } else {
+                    // Other failure
+                    AusukaAiMod.LOGGER.warn("[mid={}] [chat] Message processing failed: player={}, err={}", messageId, playerName, cause.toString());
+                    AiServices.server().execute(() -> {
+                        // Reuse existing i18n message for generic failure if present; fallback to timeout msg style
+                        MutableText t = Text.translatable("ausuka.ai.timeout");
+                        Messages.to(player, Text.of("§c").copy().append(t));
+                    });
                 }
+                return;
+            }
 
-                String out = (response == null || response.isEmpty())
-                        ? Text.translatable("ausuka.ai.no_response").getString()
-                        : response;
-                AiServices.server().execute(() ->
-                        Messages.to(player, Text.translatable("ausuka.ai.reply", out))
-                );
-            });
+            String out = (response == null || response.isEmpty())
+                    ? Text.translatable("ausuka.ai.no_response").getString()
+                    : response;
+            AiServices.server().execute(() ->
+                    Messages.to(player, Text.translatable("ausuka.ai.reply", out))
+            );
+        });
     }
 
     // Public status helpers used by other systems
