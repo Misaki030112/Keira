@@ -40,15 +40,27 @@ import java.util.stream.Collectors;
 public class WorldAnalysisTools {
 
     // ---------- Limits & Defaults ----------
-    private static final int MAX_RADIUS_ANALYZE   = 24;
-    private static final int MAX_RADIUS_RESOURCES = 48;
+    private static final int MAX_RADIUS_ANALYZE   = 64;
+    private static final int MAX_RADIUS_RESOURCES = 96;
     private static final int DEF_RADIUS_ANALYZE   = 16;
     private static final int DEF_RADIUS_RESOURCE  = 32;
 
     // Work budgets to keep a single invocation lightweight
     private static final int MAX_BLOCK_CHECKS   = 60_000;  // max block state reads per call
     private static final int MAX_ENTITY_REPORT  = 6;       // top-K entity kinds to print
-    private static final int MAX_POS_RESULTS    = 128;     // absolute cap for positions we list
+    private static final int MAX_POS_RESULTS    = 128;
+
+// === BEGIN PATCH: dynamic stride for far-view sampling ===
+private static final int TARGET_AXIS_ANALYZE  = 24; // analyze_surroundings sampling density per axis
+private static final int TARGET_AXIS_ORE      = 16; // 3D ore grid density per axis
+private static final int TARGET_AXIS_SURFACE  = 20; // near-surface (wood/water/lava) density per axis
+
+private static int strideFor(int radius, int targetAxisSamples) {
+    int step = Math.round((float) radius / (float) targetAxisSamples);
+    return Math.max(2, step);
+}
+// === END PATCH ===
+     // absolute cap for positions we list
     private static final int SURFACE_Y_DEPTH    = 6;       // how deep we peek below surface when sampling
 
     private final MinecraftServer server;
@@ -206,7 +218,7 @@ public class WorldAnalysisTools {
     private Map<Block, Integer> sampleTopBlocks(ServerWorld world, BlockPos center, int radius) {
         Map<Block, Integer> counts = new HashMap<>();
         final Mutable m = new Mutable();
-        final int step = Math.max(1, radius / 8); // adaptive stride
+        int step = strideFor(radius, TARGET_AXIS_ORE); // PATCH: keep cost ~constant at larger radii
         int checks = 0;
 
         for (int dx = -radius; dx <= radius; dx += step) {
