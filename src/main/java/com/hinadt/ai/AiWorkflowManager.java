@@ -80,6 +80,7 @@ public class AiWorkflowManager {
                     .tools(
                             tools.itemSearchTool,
                             tools.giveItemTool,
+                            tools.enchantItemTool,
                             tools.teleportTools,
                             tools.memoryTools,
                             tools.weatherTools,
@@ -163,6 +164,7 @@ public class AiWorkflowManager {
                     .tools(
                             tools.itemSearchTool,
                             tools.giveItemTool,
+                            tools.enchantItemTool,
                             tools.teleportTools,
                             tools.memoryTools,
                             tools.weatherTools,

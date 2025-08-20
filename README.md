@@ -13,6 +13,12 @@ Community server: `114.67.97.163:25565` (Fabric 1.21.8, whitelist on, online‑m
 <a href="https://weixin.qq.com/"><img src="https://img.shields.io/badge/WeChat-Misaki030112-07C160?logo=wechat&style=flat-square" alt="WeChat"/></a>
 <a><img src="https://img.shields.io/badge/Server-114.67.97.163%3A25565-7A39FF?logo=minecraft&style=flat-square" alt="Server 114.67.97.163:25565"/></a>
 
+## Screenshots
+<p align="center">
+  <img src="docs/images/example1.png" alt="In-game AI chat and actions" width="45%"/>
+  <img src="docs/images/example2.png" alt="AI tips, markers, and guidance" width="45%"/>
+</p>
+
 ## What It Can Do
 - Chat naturally and get concise, localized replies.
 - Help with survival basics: finding resources, travel and navigation, weather/time, clearing negative effects, quick recovery.

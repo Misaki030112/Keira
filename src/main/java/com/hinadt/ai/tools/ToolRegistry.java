@@ -2,6 +2,7 @@ package com.hinadt.ai.tools;
 
 import com.hinadt.ai.*;
 import com.hinadt.tools.*;
+import com.hinadt.tools.items.EnchantItemTool;
 import com.hinadt.tools.items.GiveItemTool;
 import com.hinadt.tools.items.ItemSearchTool;
 import net.minecraft.server.MinecraftServer;
@@ -16,6 +17,7 @@ public class ToolRegistry {
     public final MemoryTools memoryTools;
     public final StatusEffectTools statusEffectTools;
     public final AdminTools adminTools;
+    public final EnchantItemTool enchantItemTool;
 
     public ToolRegistry(MinecraftServer server) {
         // Item tools
@@ -27,6 +29,7 @@ public class ToolRegistry {
         this.worldAnalysisTools = new WorldAnalysisTools(server);
         this.memoryTools = new MemoryTools(server);
         this.statusEffectTools = new StatusEffectTools(server);
+        this.enchantItemTool = new EnchantItemTool(server);
 
         AiRuntime.initModAdminSystem(server);
         this.adminTools = new AdminTools(server, AiRuntime.getModAdminSystem());

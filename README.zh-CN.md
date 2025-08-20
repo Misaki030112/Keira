@@ -13,6 +13,12 @@ Ausuka.ai 是 Minecraft 里的 AI 助手，更像你世界里的“贾维斯”�
 <a href="https://weixin.qq.com/"><img src="https://img.shields.io/badge/WeChat-Misaki030112-07C160?logo=wechat&style=flat-square" alt="WeChat"/></a>
 <a><img src="https://img.shields.io/badge/服务器-114.67.97.163%3A25565-7A39FF?logo=minecraft&style=flat-square" alt="Server 114.67.97.163:25565"/></a>
 
+## 效果截图
+<p align="center">
+  <img src="docs/images/example1.png" alt="游戏内与 AI 对话与动作" width="45%"/>
+  <img src="docs/images/example2.png" alt="AI 提示、标记与引导" width="45%"/>
+</p>
+
 ## 能力概览（面向玩家）
 - 自然语言对话：得到简明、贴近语境的回复（按客户端语言显示）。
 - 生存协助：寻找资源、旅行与导航、天气/时间、清理负面效果、快速恢复。
