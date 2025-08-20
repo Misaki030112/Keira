@@ -1,0 +1,194 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Mod
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      # Checkout repository
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Validate the Gradle wrapper for security
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      # Setup Java 21 for Fabric Loom
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'microsoft'
+
+      # Enable Gradle build caching to speed up CI
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Make wrapper executable (Linux CI image)
+      - name: Prepare Gradle Wrapper
+        run: chmod +x ./gradlew
+
+      # Build the project (tests run if configured)
+      - name: Build
+        run: |
+          set -euo pipefail
+          echo "::group::Gradle Build Output"
+          ./gradlew --no-daemon build
+          echo "::endgroup::"
+          echo "::notice title=Build Complete::Artifacts are available under build/libs"
+
+      # Upload all build artifacts from build/libs for downstream jobs
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ModArtifacts-${{ github.run_number }}
+          path: build/libs/
+          if-no-files-found: error
+
+      # Summarize build results in the Actions UI
+      - name: Build Summary
+        run: |
+          set -euo pipefail
+          echo "## Build Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Workflow: $GITHUB_WORKFLOW" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run: $GITHUB_RUN_NUMBER ($GITHUB_SHA)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifacts: ModArtifacts-${GITHUB_RUN_NUMBER}" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy To MC Server
+    needs: build
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+    permissions:
+      contents: read
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      MC_SERVER_DIR: ${{ secrets.MC_SERVER_DIR }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+
+    steps:
+      # Download build artifacts produced by the build job
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ModArtifacts-${{ github.run_number }}
+          path: build/libs
+
+      # Check that all required deployment secrets are present
+      - name: Verify Required Secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "${DEPLOY_HOST:-}" ]] || missing+=(DEPLOY_HOST)
+          [[ -n "${DEPLOY_USER:-}" ]] || missing+=(DEPLOY_USER)
+          [[ -n "${DEPLOY_SSH_KEY:-}" ]] || missing+=(DEPLOY_SSH_KEY)
+          [[ -n "${MC_SERVER_DIR:-}" ]] || missing+=(MC_SERVER_DIR)
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error title=Missing Secrets::${missing[*]}"
+            exit 1
+          fi
+          echo "::notice title=Secrets OK::Deployment secrets validated."
+
+      # Prepare SSH key and known_hosts for non-interactive SSH/SCP
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s' "$DEPLOY_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          PORT=${DEPLOY_PORT:-22}
+          echo "::group::SSH Known Hosts"
+          ssh-keyscan -p "$PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          cat ~/.ssh/known_hosts
+          echo "::endgroup::"
+          echo "::notice title=SSH Ready::Key installed and host scanned."
+
+      # Select the release JAR to deploy (skip sources/dev/javadoc/tests)
+      - name: Select Release Jar
+        id: pickjar
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mapfile -t jars < <(ls -1 build/libs/*.jar)
+          if (( ${#jars[@]} == 0 )); then
+            echo "::error title=No JAR Found::build/libs is empty"
+            exit 1
+          fi
+          chosen=""
+          for j in "${jars[@]}"; do
+            if [[ "$j" =~ -sources\.jar$ || "$j" =~ -dev\.jar$ || "$j" =~ -javadoc\.jar$ || "$j" =~ -tests?\.jar$ ]]; then
+              echo "::debug::Skipping non-runtime jar: $j"
+              continue
+            fi
+            chosen="$j"; break
+          done
+          if [[ -z "$chosen" ]]; then
+            chosen="${jars[0]}"
+            echo "::warning title=Fallback Jar::Using first jar: $chosen"
+          fi
+          echo "jar=$chosen" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Jar Selected::$chosen"
+
+      # Remove old mod JARs from the server mods directory
+      - name: Remove Old Mod On Server
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT=${DEPLOY_PORT:-22}
+          echo "::group::Remote Cleanup"
+          ssh -i ~/.ssh/id_rsa -p "$PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "mkdir -p \"${MC_SERVER_DIR}/mods\" && rm -f \"${MC_SERVER_DIR}/mods/ausuka-ai-mod*.jar\" || true"
+          echo "::endgroup::"
+          echo "::notice title=Cleanup Done::Old ausuka-ai-mod JARs removed."
+
+      # Upload the new JAR to the server mods directory
+      - name: Upload New Mod Jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT=${DEPLOY_PORT:-22}
+          JAR='${{ steps.pickjar.outputs.jar }}'
+          echo "::group::SCP Upload"
+          echo "::debug::Uploading $JAR to ${MC_SERVER_DIR}/mods/"
+          scp -i ~/.ssh/id_rsa -P "$PORT" "$JAR" "${DEPLOY_USER}@${DEPLOY_HOST}:${MC_SERVER_DIR}/mods/"
+          echo "::endgroup::"
+          echo "::notice title=Upload Complete::New mod uploaded to mods directory."
+
+      # Post a clear next-step message in the job summary
+      - name: Deployment Summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Host: $DEPLOY_HOST" >> "$GITHUB_STEP_SUMMARY"
+          echo "- User: $DEPLOY_USER" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Server Dir: $MC_SERVER_DIR" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Uploaded: ${{ steps.pickjar.outputs.jar }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> Deployment complete. Please restart the MC server via MCS UI to apply the new mod." >> "$GITHUB_STEP_SUMMARY"
+
