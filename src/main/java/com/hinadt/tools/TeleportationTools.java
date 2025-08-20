@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.hinadt.AusukaAiMod;
 import com.hinadt.observability.RequestContext;
 import com.hinadt.util.MainThread;
+import net.minecraft.block.Blocks;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.registry.RegistryKey;
@@ -15,8 +16,10 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -53,65 +56,65 @@ public class TeleportationTools {
     @Tool(
             name = "teleport_player",
             description = """
-Teleport a player to a canonical destination. No natural-language or keyword matching is performed.
-
-INPUT CONTRACT
-- player: Online player name or UUID (required).
-- dest (required): one of the following canonical forms ONLY:
-  1) Coordinates      → "x y z"               e.g. "100 64 -20"
-     Relative coords  → "~ ~1 ~-5"            (relative to player position)
-  2) Token            → "bed" | "spawn"
-  3) POI              → "poi:village"         (nearest villagers within LOADED chunks only; never generates new chunks)
-  4) Dimension        → "dimension:<worldId>" e.g. "dimension:minecraft:the_end"
-     (When dest is a Dimension form, the world is that dimension and position resolves near its world spawn.)
-- worldHint (optional): Explicit world id (e.g. "minecraft:overworld" | "minecraft:the_nether" | "minecraft:the_end").
-  Used ONLY when dest is coordinates / token / poi to select the target world. Ignored for dimension-form dest.
-
-WORLD RESOLUTION PRIORITY
-1) If dest starts with "dimension:", use that world (ignores worldHint for world choice).
-2) Else if worldHint is a valid world id, use that world.
-3) Else use the player’s current world.
-
-SAFETY & BEHAVIOR
-- Safe-landing is enforced: the tool vertically scans to find a standable 2-block-high space (feet + head free, solid block below).
-- No new chunk generation: POI queries and scans work on already-loaded area only.
-- If a token implies a different world (e.g., bed in nether) and no matching worldHint is supplied, the call fails with guidance.
-
-RETURNS (JSON)
-{
-  "ok": true,
-  "code": "OK",
-  "message": "Teleported.",
-  "world": "minecraft:the_end",
-  "x": 0.5, "y": 65.0, "z": 0.5,
-  "adjust": { "clampedY": true, "movedSurface": true, "collisionFixed": false },
-  "costMs": 12
-}
-
-ERROR CODES
-- ERR_PLAYER_OFFLINE         → Target player is not online
-- ERR_BAD_DEST               → dest is empty or not a canonical form
-- ERR_WORLD_NOT_FOUND        → Provided dimension/world id does not exist
-- ERR_NO_BED                 → No valid bed spawn point for the player
-- ERR_DEST_UNRESOLVED        → Could not resolve a valid target (e.g., bed in another world without worldHint; no loaded village)
-- ERR_TELEPORT               → Unhandled server-side error during teleport
-
-USAGE EXAMPLES
-- To the End dimension (near its world spawn):
-  { "player":"Alice", "dest":"dimension:minecraft:the_end" }
-
-- Cross-dimension absolute coordinates (to the Nether):
-  { "player":"Bob", "dest":"100 64 0", "worldHint":"minecraft:the_nether" }
-
-- Relative nudge in-place (current world):
-  { "player":"Eve", "dest":"~ ~1 ~-5" }
-
-- Nearest village within LOADED chunks:
-  { "player":"Eve", "dest":"poi:village" }
-
-- Player bed in Overworld (require matching worldHint if bed is in a different world):
-  { "player":"Eve", "dest":"bed", "worldHint":"minecraft:overworld" }
-"""
+            Teleport a player to a canonical destination. No natural-language or keyword matching is performed.
+            
+            INPUT CONTRACT
+            - player: Online player name or UUID (required).
+            - dest (required): one of the following canonical forms ONLY:
+              1) Coordinates      → "x y z"               e.g. "100 64 -20"
+                 Relative coords  → "~ ~1 ~-5"            (relative to player position)
+              2) Token            → "bed" | "spawn"
+              3) POI              → "poi:village"         (nearest villagers within LOADED chunks only; never generates new chunks)
+              4) Dimension        → "dimension:<worldId>" e.g. "dimension:minecraft:the_end"
+                 (When dest is a Dimension form, the world is that dimension and position resolves near its world spawn.)
+            - worldHint (optional): Explicit world id (e.g. "minecraft:overworld" | "minecraft:the_nether" | "minecraft:the_end").
+              Used ONLY when dest is coordinates / token / poi to select the target world. Ignored for dimension-form dest.
+            
+            WORLD RESOLUTION PRIORITY
+            1) If dest starts with "dimension:", use that world (ignores worldHint for world choice).
+            2) Else if worldHint is a valid world id, use that world.
+            3) Else use the player’s current world.
+            
+            SAFETY & BEHAVIOR
+            - Safe-landing is enforced: the tool vertically scans to find a standable 2-block-high space (feet + head free, solid block below).
+            - No new chunk generation: POI queries and scans work on already-loaded area only.
+            - If a token implies a different world (e.g., bed in nether) and no matching worldHint is supplied, the call fails with guidance.
+            
+            RETURNS (JSON)
+            {
+              "ok": true,
+              "code": "OK",
+              "message": "Teleported.",
+              "world": "minecraft:the_end",
+              "x": 0.5, "y": 65.0, "z": 0.5,
+              "adjust": { "clampedY": true, "movedSurface": true, "collisionFixed": false },
+              "costMs": 12
+            }
+            
+            ERROR CODES
+            - ERR_PLAYER_OFFLINE         → Target player is not online
+            - ERR_BAD_DEST               → dest is empty or not a canonical form
+            - ERR_WORLD_NOT_FOUND        → Provided dimension/world id does not exist
+            - ERR_NO_BED                 → No valid bed spawn point for the player
+            - ERR_DEST_UNRESOLVED        → Could not resolve a valid target (e.g., bed in another world without worldHint; no loaded village)
+            - ERR_TELEPORT               → Unhandled server-side error during teleport
+            
+            USAGE EXAMPLES
+            - To the End dimension (near its world spawn):
+              { "player":"Alice", "dest":"dimension:minecraft:the_end" }
+            
+            - Cross-dimension absolute coordinates (to the Nether):
+              { "player":"Bob", "dest":"100 64 0", "worldHint":"minecraft:the_nether" }
+            
+            - Relative nudge in-place (current world):
+              { "player":"Eve", "dest":"~ ~1 ~-5" }
+            
+            - Nearest village within LOADED chunks:
+              { "player":"Eve", "dest":"poi:village" }
+            
+            - Player bed in Overworld (require matching worldHint if bed is in a different world):
+              { "player":"Eve", "dest":"bed", "worldHint":"minecraft:overworld" }
+            """
     )
     public String teleportPlayer(
             @ToolParam(description = "Online player name or UUID") String playerNameOrUuid,
@@ -162,6 +165,7 @@ USAGE EXAMPLES
                 a.addProperty("clampedY", adj.clampedY);
                 a.addProperty("movedSurface", adj.movedSurface);
                 a.addProperty("collisionFixed", adj.collisionFixed);
+                a.addProperty("platformBuilt", adj.platformBuilt);
                 root.add("adjust", a);
                 root.addProperty("costMs", ms);
                 out.set(GSON.toJson(root));
@@ -295,7 +299,77 @@ USAGE EXAMPLES
 
     // ------------------------------ Safe landing & teleport ------------------------------
 
-    private record SafeAdjust(Vec3d safe, boolean clampedY, boolean movedSurface, boolean collisionFixed) {}
+    
+    // Horizontal fallback: search for nearest standable column around origin in LOADED chunks (no new chunks generated here).
+    private Vec3d findStandableAround(ServerWorld w, BlockPos origin, int startY, int maxRadius, int step) {
+        step = Math.max(1, step);
+        for (int r = 0; r <= maxRadius; r += step) {
+            // scan square ring edges
+            for (int dx = -r; dx <= r; dx += step) {
+                int x1 = origin.getX() + dx;
+                int z1 = origin.getZ() - r;
+                if (isChunkLoadedAt(w, x1, z1)) {
+                    Vec3d v = scanVerticalForSpace(w, new Vec3d(x1 + 0.5, startY, z1 + 0.5), 256);
+                    if (isStandable(w, BlockPos.ofFloored(v.x, v.y, v.z))) return v;
+                }
+                int z2 = origin.getZ() + r;
+                if (isChunkLoadedAt(w, x1, z2)) {
+                    Vec3d v = scanVerticalForSpace(w, new Vec3d(x1 + 0.5, startY, z2 + 0.5), 256);
+                    if (isStandable(w, BlockPos.ofFloored(v.x, v.y, v.z))) return v;
+                }
+            }
+            for (int dz = -r; dz <= r; dz += step) {
+                int z1 = origin.getZ() + dz;
+                int x1 = origin.getX() - r;
+                if (isChunkLoadedAt(w, x1, z1)) {
+                    Vec3d v = scanVerticalForSpace(w, new Vec3d(x1 + 0.5, startY, z1 + 0.5), 256);
+                    if (isStandable(w, BlockPos.ofFloored(v.x, v.y, v.z))) return v;
+                }
+                int x2 = origin.getX() + r;
+                if (isChunkLoadedAt(w, x2, z1)) {
+                    Vec3d v = scanVerticalForSpace(w, new Vec3d(x2 + 0.5, startY, z1 + 0.5), 256);
+                    if (isStandable(w, BlockPos.ofFloored(v.x, v.y, v.z))) return v;
+                }
+            }
+        }
+        return null;
+    }
+
+    // Check if the chunk containing the given block column is loaded (non-deprecated).
+    private static boolean isChunkLoadedAt(ServerWorld world, int blockX, int blockZ) {
+        return world.isChunkLoaded(blockX >> 4, blockZ >> 4);
+    }
+
+    // As a last resort, build a small platform a few blocks below target and clear space above.
+    private boolean buildSafetyPlatform(ServerWorld w, BlockPos center, int y, int radius) {
+        try {
+            int cx = center.getX();
+            int cz = center.getZ();
+            // Choose block by dimension
+            String key = w.getRegistryKey().getValue().toString();
+            var state = key.endsWith("the_end") ? Blocks.END_STONE.getDefaultState()
+                      : (key.endsWith("the_nether") ? Blocks.NETHERRACK.getDefaultState()
+                                                    : Blocks.STONE.getDefaultState());
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    BlockPos p = new BlockPos(cx + dx, y, cz + dz);
+                    // place platform
+                    w.setBlockState(p, state);
+                    // clear 2 blocks of air above
+                    w.setBlockState(p.up(), net.minecraft.block.Blocks.AIR.getDefaultState());
+                    w.setBlockState(p.up(2), net.minecraft.block.Blocks.AIR.getDefaultState());
+                }
+            }
+            AusukaAiMod.LOGGER.debug("{} [teleport:platform] world='{}' y={} r={}",
+                    RequestContext.midTag(), w.getRegistryKey().getValue(), y, radius);
+            return true;
+        } catch (Exception e) {
+            AusukaAiMod.LOGGER.warn("{} [teleport:platform] failed: {}", RequestContext.midTag(), e.getMessage());
+            return false;
+        }
+    }
+
+    private record SafeAdjust(Vec3d safe, boolean clampedY, boolean movedSurface, boolean collisionFixed, boolean platformBuilt) {}
 
     private SafeAdjust adjustSafePosition(ServerWorld w, Vec3d wanted) {
         double minY = w.getBottomY();
@@ -304,24 +378,64 @@ USAGE EXAMPLES
         boolean clamped = (y != wanted.y);
 
         Vec3d candidate = new Vec3d(wanted.x, y, wanted.z);
-        Vec3d safe = scanVerticalForSpace(w, candidate, 128);
+
+        // (1) snap to heightmap top if the column is loaded
+        int ox = (int) Math.floor(candidate.x);
+        int oz = (int) Math.floor(candidate.z);
+        if (isChunkLoadedAt(w, ox, oz)) {
+            int top = w.getTopY(Heightmap.Type.MOTION_BLOCKING, ox, oz);
+            if (top > w.getBottomY()) {
+                candidate = new Vec3d(ox + 0.5, top + 1.0, oz + 0.5);
+            }
+        }
+
+        // (2) vertical scan with wider range
+        Vec3d safe = scanVerticalForSpace(w, candidate, 192);
         boolean movedSurface = (safe.y != candidate.y);
 
-        boolean collisionFixed = false; // reserved for future horizontal nudge
+        boolean platformBuilt = false;
 
-        return new SafeAdjust(safe, clamped, movedSurface, collisionFixed);
+        // (3) horizontal fallback if not standable
+        BlockPos pf = BlockPos.ofFloored(safe.x, safe.y, safe.z);
+        if (!isStandable(w, pf)) {
+            Vec3d around = findStandableAround(
+                    w,
+                    BlockPos.ofFloored(candidate.x, candidate.y, candidate.z),
+                    (int) Math.floor(candidate.y),
+                    16,
+                    2
+            );
+            if (around != null) {
+                safe = around;
+                pf = BlockPos.ofFloored(safe.x, safe.y, safe.z);
+            }
+        }
+
+        // (4) ultimate fallback: build a small platform a few blocks below and land there
+        if (!isStandable(w, pf)) {
+            int platY = Math.max((int) Math.floor(wanted.y) - 6, (int) (w.getBottomY() + 4));
+            BlockPos center = new BlockPos(ox, platY, oz);
+            boolean ok = buildSafetyPlatform(w, center, platY, 1); // 3x3 platform (radius=1)
+            if (ok) {
+                safe = new Vec3d(center.getX() + 0.5, platY + 1.0, center.getZ() + 0.5);
+                platformBuilt = true;
+            }
+        }
+
+        return new SafeAdjust(safe, clamped, movedSurface, false, platformBuilt);
+    
     }
 
     private Vec3d scanVerticalForSpace(ServerWorld w, Vec3d start, int range) {
         BlockPos.Mutable m = new BlockPos.Mutable();
         for (int dy = 0; dy <= range; dy++) {
-            for (int sign : new int[]{+1, -1}) {
+            for (int sign : new int[]{-1, +1}) {
                 int y = (int)Math.floor(start.y + sign * dy);
                 int topY = w.getBottomY() + w.getHeight() - 1;
                 if (y < w.getBottomY()+1 || y > topY-2) continue;
                 m.set(start.x, y, start.z);
                 if (isStandable(w, m)) {
-                    return new Vec3d(start.x + 0.5, y, start.z + 0.5);
+                    return new Vec3d(m.getX() + 0.5, y, m.getZ() + 0.5);
                 }
             }
         }
