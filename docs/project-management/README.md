@@ -80,11 +80,14 @@ See `AGENTS.md` for comprehensive PR creation guidelines including:
 Configure the following repository secrets:
 
 ```
-OPENAI_API_KEY=your_openai_api_key        # For AI processing (optional)
-DEEPSEEK_API_KEY=your_deepseek_api_key    # Alternative to OpenAI (optional)
+OPENAI_API_KEY=your_openai_api_key        # For AI processing
+DEEPSEEK_API_KEY=your_deepseek_api_key    # Alternative to OpenAI
+ANTHROPIC_API_KEY=your_anthropic_api_key  # Alternative to OpenAI
 ```
 
-**Note:** AI processing will fall back to rule-based classification if no API keys are provided.
+Dependencies for automation scripts are defined in `scripts/requirements.txt`.
+
+Note: AI processing requires at least one provider key. If none are provided, processing fails fast (no keyword fallbacks) to avoid misclassification.
 
 ### 3. Project URL Configuration
 
@@ -163,11 +166,11 @@ Ensure the following labels exist in your repository:
 
 ### AI Processing
 
-The AI processing can be customized by modifying the prompt in `enhanced-ai-processing.yml`. The system supports:
+The AI processing can be customized by modifying the Python prompt/templates in `scripts/process_ai_issue.py` and workflow `ai-issue-processing.yml`. The system supports:
 
 - Custom classification rules
 - Different AI providers
-- Fallback to rule-based processing
+- No keyword/rule-based fallbacks (fail-fast for safety)
 - Custom label assignment logic
 
 ### Project Board Automation

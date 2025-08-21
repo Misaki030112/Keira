@@ -24,25 +24,110 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 🐍 Install Dependencies
+      - name: 📦 Install Dependencies
         run: |
-          pip install --no-cache-dir pyyaml requests
-          # Optional AI libraries - install if needed
-          pip install --no-cache-dir openai anthropic groq || echo "Optional AI libraries not installed"
+          set -euo pipefail
+          pip install --no-cache-dir -r scripts/requirements.txt
 
       - name: 🤖 Process Issue with AI
+        id: process
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_LABELS_JSON: ${{ toJson(github.event.issue.labels) }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python scripts/process_ai_issue.py
 
-      - name: 📋 Update Issue with Python
+      - name: 📋 Update Issue (inline Python)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+          REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-        run: python scripts/update_issue.py
+          ORIGINAL_TITLE: ${{ github.event.issue.title }}
+          ISSUE_TYPE: ${{ steps.process.outputs.issue_type }}
+          PRIORITY: ${{ steps.process.outputs.priority }}
+          LABELS: ${{ steps.process.outputs.labels }}
+          FORMATTED_CONTENT: ${{ steps.process.outputs.formatted_content }}
+          SUGGESTED_TITLE: ${{ steps.process.outputs.suggested_title }}
+        run: |
+          python - << 'PY'
+          import os, requests
+          from typing import List
+
+          token = os.environ['GITHUB_TOKEN']
+          repo = os.environ['REPO']
+          issue_number = int(os.environ['ISSUE_NUMBER'])
+          original_title = os.environ['ORIGINAL_TITLE']
+          issue_type = os.environ['ISSUE_TYPE']
+          priority = os.environ['PRIORITY']
+          labels_csv = os.environ['LABELS']
+          body = os.environ['FORMATTED_CONTENT']
+          suggested = os.environ.get('SUGGESTED_TITLE') or ''
+
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json',
+          }
+          base = f'https://api.github.com/repos/{repo}'
+
+          def patch_issue(title: str, body: str):
+              url = f'{base}/issues/{issue_number}'
+              resp = requests.patch(url, headers=headers, json={'title': title, 'body': body}, timeout=30)
+              resp.raise_for_status()
+
+          def remove_label(name: str):
+              url = f'{base}/issues/{issue_number}/labels/{name}'
+              r = requests.delete(url, headers=headers, timeout=30)
+              if r.status_code not in (200, 204, 404):
+                  r.raise_for_status()
+
+          def add_labels(labels: List[str]):
+              url = f'{base}/issues/{issue_number}/labels'
+              r = requests.post(url, headers=headers, json=labels, timeout=30)
+              r.raise_for_status()
+
+          def comment(msg: str):
+              url = f'{base}/issues/{issue_number}/comments'
+              r = requests.post(url, headers=headers, json={'body': msg}, timeout=30)
+              r.raise_for_status()
+
+          # Title rewrite: prefer AI suggested title; otherwise, rewrite [AI] tag if present
+          new_title = (suggested.strip() or original_title).strip()
+          if '[AI]' in new_title:
+              new_title = new_title.replace('[AI]', f'[{issue_type.capitalize()}]')
+
+          # Update issue
+          patch_issue(new_title, body)
+          remove_label('ai-processing')
+          labels = [l.strip() for l in labels_csv.split(',') if l.strip()]
+          labels.append(priority)
+          add_labels(labels)
+          comment(f"🤖 AI processing complete. Type: {issue_type}, Priority: {priority}. Labels: {', '.join(labels)}")
+          print('Update completed.')
+          PY
+
+      - name: 🔥 Handle Failure (inline Python)
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          python - << 'PY'
+          import os, requests
+          token = os.environ['GITHUB_TOKEN']
+          repo = os.environ['REPO']
+          num = int(os.environ['ISSUE_NUMBER'])
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json',
+          }
+          base = f'https://api.github.com/repos/{repo}'
+          requests.post(f'{base}/issues/{num}/comments', headers=headers, json={'body': '⚠️ AI Processing Failed. Please format using standard templates or wait for review.'}, timeout=30).raise_for_status()
+          requests.post(f'{base}/issues/{num}/labels', headers=headers, json=['ai-processing-error','needs-triage'], timeout=30).raise_for_status()
+          PY
