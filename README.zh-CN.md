@@ -1,7 +1,7 @@
 # Keira（Minecraft Fabric Mod）
 
 <p align="center">
-  <img src="src/main/resources/assets/keira/icon.png" alt="Keira" width="160"/>
+  <img src="src/main/resources/assets/keira/icon.png" alt="Keira" width="210"/>
 </p>
 
 <p align="center">
