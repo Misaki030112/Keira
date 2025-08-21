@@ -12,32 +12,15 @@ body:
         Thank you for reporting a bug! Please fill out the following
         information to help us resolve the issue.
 
-  - type: input
-    id: mod-version
+  - type: markdown
     attributes:
-      label: Mod Version
-      description: Which version of Ausuka.ai are you using?
-      placeholder: "e.g., 1.0.0"
-    validations:
-      required: true
-
-  - type: input
-    id: minecraft-version
-    attributes:
-      label: Minecraft Version
-      description: Which version of Minecraft are you using?
-      placeholder: "e.g., 1.21.4"
-    validations:
-      required: true
-
-  - type: input
-    id: fabric-version
-    attributes:
-      label: Fabric Loader Version
-      description: Which version of Fabric Loader are you using?
-      placeholder: "e.g., 0.16.0"
-    validations:
-      required: true
+      value: |
+        ## Version Information
+        | Info | Details |
+        |------|---------|
+        | Mod Version | Please specify (e.g., 1.0.0) |
+        | Minecraft Version | Please specify (e.g., 1.21.4) |
+        | Fabric Version | Please specify (e.g., 0.16.0) |
 
   - type: textarea
     id: description

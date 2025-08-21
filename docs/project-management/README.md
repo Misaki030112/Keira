@@ -102,20 +102,14 @@ Ensure the following labels exist in your repository:
 - `bug` (red)
 - `enhancement` (blue) 
 - `feature-request` (green)
+- `question` (purple)
 
 **Priority Labels:**
-- `priority:high` (red)
-- `priority:medium` (orange)
-- `priority:low` (yellow)
-
-**Area Labels:**
-- `area:ai` (purple)
-- `area:admin` (brown)
-- `area:config` (gray)
-- `area:performance` (orange)
-- `area:i18n` (blue)
-- `area:ui` (green)
-- `area:tools` (cyan)
+- `p0` (red) - Critical (security, data loss)
+- `p1` (orange) - High priority (major features/bugs)
+- `p2` (yellow) - Medium priority (normal work)
+- `p3` (green) - Low priority (nice to have)
+- `p4` (gray) - Lowest (future considerations)
 
 **Status Labels:**
 - `needs-triage` (yellow)

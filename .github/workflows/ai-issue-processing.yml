@@ -24,141 +24,25 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: 🐍 Install Dependencies
+        run: |
+          pip install --no-cache-dir pyyaml requests
+          # Optional AI libraries - install if needed
+          pip install --no-cache-dir openai anthropic groq || echo "Optional AI libraries not installed"
+
       - name: 🤖 Process Issue with AI
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python scripts/process_ai_issue.py
 
-      - name: 📋 Update Issue
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            
-            // Read outputs from Python script
-            const outputs = process.env.GITHUB_OUTPUT ? 
-              fs.readFileSync(process.env.GITHUB_OUTPUT, 'utf8') : '';
-            
-            console.log('Processing outputs...');
-            
-            // Parse outputs
-            let issueType = '';
-            let priority = '';
-            let labels = '';
-            let formattedContent = '';
-            
-            const lines = outputs.split('\n');
-            let inContent = false;
-            let contentLines = [];
-            
-            for (const line of lines) {
-              if (line.startsWith('issue_type=')) {
-                issueType = line.split('=')[1];
-              } else if (line.startsWith('priority=')) {
-                priority = line.split('=')[1];
-              } else if (line.startsWith('labels=')) {
-                labels = line.split('=')[1];
-              } else if (line === 'formatted_content<<EOF') {
-                inContent = true;
-              } else if (line === 'EOF' && inContent) {
-                inContent = false;
-              } else if (inContent) {
-                contentLines.push(line);
-              }
-            }
-            
-            formattedContent = contentLines.join('\n');
-            
-            console.log(`Issue Type: ${issueType}`);
-            console.log(`Priority: ${priority}`);
-            console.log(`Labels: ${labels}`);
-            
-            // Update issue title
-            const originalTitle = context.payload.issue.title;
-            const newTitle = originalTitle.replace('[AI]', `[${issueType.charAt(0).toUpperCase() + issueType.slice(1)}]`);
-            
-            // Update the issue
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              title: newTitle,
-              body: formattedContent
-            });
-            
-            // Update labels
-            const labelList = labels.split(',').filter(l => l.trim());
-            
-            // Remove ai-processing label
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                name: 'ai-processing'
-              });
-            } catch (e) {
-              console.log('ai-processing label not found');
-            }
-            
-            // Add new labels including priority
-            const finalLabels = [...labelList, priority];
-            
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              labels: finalLabels
-            });
-            
-            // Add processing comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `🤖 **AI Processing Complete**
-              
-Your issue has been automatically processed and formatted as a **${issueType}** request.
-
-**What happened:**
-- ✅ Content analyzed and categorized
-- ✅ Issue formatted using appropriate template
-- ✅ Labels applied: ${finalLabels.join(', ')}
-- ✅ Priority assigned: ${priority}
-
-Please review the formatted content above and add any missing details.
-
-*Processed by AI automation system* 🚀`
-            });
-
-      - name: ❌ Handle Processing Errors
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `⚠️ **AI Processing Failed**
-              
-There was an error processing your AI-driven issue. 
-
-**Next steps:**
-- Please manually format your issue using one of our standard templates
-- Or wait for manual review from the development team
-
-The error has been logged and will be investigated.`
-            });
-            
-            // Add error label
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              labels: ['ai-processing-error', 'needs-triage']
-            });
+      - name: 📋 Update Issue with Python
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: python scripts/update_issue.py
