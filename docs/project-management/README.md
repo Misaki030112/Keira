@@ -1,53 +1,78 @@
-# Ausuka.ai Project Management Setup
+# Project Management Documentation
 
-This directory contains the project management automation for the Ausuka.ai Minecraft mod.
+Simple project management setup for the Ausuka.ai mod repository.
 
-## Overview
+## Issue Templates
 
-The project management system provides:
+- **🤖 AI-Driven** - Simple template where users describe their ideas in natural language
+- **🐛 Bug Report** - Standard bug reporting with version info
+- **🔧 Enhancement** - Improvements to existing features  
+- **✨ Feature Request** - New feature suggestions
+- **❓ Q&A** - Questions about the mod
 
-1. **Automated Issue Processing** - AI-driven issue categorization and formatting
-2. **Issue-PR Relationship Enforcement** - Strict 1:1 relationship between issues and pull requests
-3. **Project Board Integration** - Automatic synchronization with GitHub Projects
-4. **Weekly Management Cycles** - Automated project health monitoring and archival
+## Automation
 
-## Components
+### AI Processing
+- Automatically processes AI-driven issues
+- Converts natural language to structured formats
+- Uses Python for reliable text processing
 
-### Issue Templates
+### Issue-PR Linking
+- Enforces "Closes #XXX" format in PRs
+- Maintains 1:1 relationship between issues and PRs
 
-- **Bug Report** (`bug_report.yml`) - Structured template for bug reports
-- **Feature Request** (`feature_request.yml`) - Template for new feature suggestions  
-- **Enhancement** (`enhancement.yml`) - Template for improvements to existing features
-- **AI-Driven** (`ai_driven.yml`) - Natural language template processed by AI
+### Weekly Management
+- Archives closed issues weekly
+- Marks issues stale after 6 months
+- Generates project health reports
 
-### PR Template
+## Labels
 
-- **Standard PR Template** (`pull_request_template.md`) - Comprehensive template for all PRs with AI development guidelines
+### Types
+- `bug` - Something isn't working
+- `enhancement` - Improvement to existing functionality  
+- `feature-request` - New functionality request
+- `question` - Questions needing answers
 
-### Automation Workflows
+### Priority (p0-p4)
+- `p0` - Critical (security, data loss)
+- `p1` - High priority (major features/bugs)
+- `p2` - Medium priority (normal work)
+- `p3` - Low priority (nice to have)
+- `p4` - Lowest (future considerations)
 
-- **AI Issue Processing** (`ai-issue-processing.yml`) - Basic AI processing workflow
-- **Enhanced AI Processing** (`enhanced-ai-processing.yml`) - Advanced AI analysis using OpenAI/DeepSeek APIs
-- **Issue-PR Enforcement** (`issue-pr-enforcement.yml`) - Enforces 1:1 issue-PR relationships
-- **Project Management** (`project-management.yml`) - Weekly cycles, metrics, and automation
+### Status
+- `needs-triage` - Needs initial review
+- `needs-info` - Waiting for more information
+- `in-progress` - Currently being worked on
+- `blocked` - Blocked by dependencies
+- `stale` - No recent activity
 
-## Setup Instructions
+## For Contributors
 
-### 1. GitHub Project Board Setup
+1. **Creating Issues**: Use the AI-driven template - just describe what you're thinking
+2. **Creating PRs**: Must link to an issue using "Closes #XXX" format
+3. **Questions**: Use the Q&A template for help
 
-Create a new GitHub Project with the following structure:
+## For AI Agents
 
-**Columns:**
-- 📥 **Incoming** - New issues and PRs awaiting triage
-- 🔍 **In Review** - Issues being evaluated and discussed
-- 🏗️ **In Progress** - Issues with associated PRs being developed
-- ✅ **Done** - Completed issues and merged PRs
-- 📦 **Archived** - Items archived during weekly cycles
+See `AGENTS.md` for comprehensive PR creation guidelines including:
+- Required issue linking
+- Title formats (fix:, feat:, enhance:, etc.)
+- Testing requirements
+- i18n considerations
 
-**Custom Fields:**
-- **Priority** (Select): High, Medium, Low
-- **Area** (Multi-select): AI, Admin, Config, Performance, I18n, UI, Tools
-- **Effort** (Number): Story points or complexity estimate
+## Examples
+
+### Good Issue Title
+- `[AI] The mod should remember my building preferences`
+- `[Bug] AI crashes when teleporting to saved location`
+- `[Feature] Add inventory sorting command`
+
+### Good PR Title  
+- `fix: Resolve AI crash during teleportation (Closes #123)`
+- `feat: Add inventory sorting command (Closes #124)`
+- `enhance: Improve AI response speed (Closes #125)`
 - **Sprint** (Text): Current sprint/milestone identifier
 
 ### 2. Required Secrets
