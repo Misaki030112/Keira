@@ -43,3 +43,13 @@ replay_*.log
 logs/
 config/ausuka-ai/
 config/*.properties
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
