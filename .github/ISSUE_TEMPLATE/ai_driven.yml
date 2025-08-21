@@ -1,0 +1,70 @@
+name: 🤖 AI-Driven Issue
+description: Describe your idea in natural language - AI will help format it properly
+title: "[AI] "
+labels: ["ai-processing", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## AI-Powered Issue Creation
+        
+        Just describe your idea, problem, or suggestion in natural language below. Our AI will automatically:
+        - Categorize your issue (bug, feature, enhancement)
+        - Format it according to our templates
+        - Add appropriate labels and structure
+        - Suggest implementation approaches
+        
+        **Simply write what's on your mind - be as detailed or as brief as you like!**
+
+  - type: textarea
+    id: natural-description
+    attributes:
+      label: Describe Your Idea
+      description: Tell us what you're thinking about in your own words
+      placeholder: |
+        Examples:
+        "I think the AI should remember what I built last time and help me continue building"
+        "The mod crashes when I ask it to teleport me to my base"
+        "It would be cool if the AI could automatically organize my inventory"
+        "The AI responses are too slow on my server"
+        "I want to be able to teach the AI custom commands for my server"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context (Optional)
+      description: Any extra details, examples, or context you'd like to add
+      placeholder: |
+        Feel free to add:
+        - Specific examples or scenarios
+        - Technical details if you know them
+        - Screenshots or logs
+        - Related experiences or comparisons
+
+  - type: checkboxes
+    id: ai-agreement
+    attributes:
+      label: AI Processing Agreement
+      description: By submitting this issue, you agree to let our AI assistant process and reformat your request
+      options:
+        - label: I agree to let AI process and reformat this issue
+      validations:
+        required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        
+        **What happens next?**
+        1. Our AI will analyze your description
+        2. It will determine if this is a bug, feature request, or enhancement
+        3. The issue will be automatically reformatted using the appropriate template
+        4. Relevant labels and categorization will be applied
+        5. The development team will be notified for review
+        
+        *This process usually takes less than a minute.*

@@ -1,0 +1,323 @@
+name: Project Management Automation
+
+on:
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled]
+  pull_request:
+    types: [opened, closed, merged, ready_for_review]
+  schedule:
+    # Run weekly on Sundays at 00:00 UTC for weekly project management
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'sync'
+        type: choice
+        options:
+          - sync
+          - archive
+          - weekly-cycle
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+  projects: write
+
+jobs:
+  sync-to-project:
+    name: Sync Issues to Project Board
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'sync')
+    
+    steps:
+      - name: Add Issue to Project
+        if: github.event_name == 'issues' && github.event.action == 'opened'
+        uses: actions/add-to-project@v0.5.0
+        with:
+          project-url: https://github.com/users/Misaki030112/projects/1  # Update with actual project URL
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add PR to Project  
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        uses: actions/add-to-project@v0.5.0
+        with:
+          project-url: https://github.com/users/Misaki030112/projects/1  # Update with actual project URL
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Project Item Status
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // This is a simplified version - you may need to customize based on your project setup
+            const itemType = context.eventName === 'issues' ? 'Issue' : 'Pull Request';
+            const itemNumber = context.eventName === 'issues' ? context.payload.issue.number : context.payload.pull_request.number;
+            const action = context.payload.action;
+            
+            console.log(`Processing ${itemType} #${itemNumber} with action: ${action}`);
+            
+            // Here you would typically use the GitHub GraphQL API to update project fields
+            // For now, we'll just log the action
+            if (action === 'opened') {
+              console.log(`Added ${itemType} #${itemNumber} to project board`);
+            } else if (action === 'closed' || action === 'merged') {
+              console.log(`Marked ${itemType} #${itemNumber} as completed in project`);
+            }
+
+  weekly-project-cycle:
+    name: Weekly Project Management Cycle
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 0 * * 0' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'weekly-cycle')
+    
+    steps:
+      - name: Archive Completed Items
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Get all closed issues from the last week
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+            
+            const { data: closedIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              since: oneWeekAgo.toISOString(),
+              per_page: 100
+            });
+            
+            const { data: closedPRs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              per_page: 100
+            });
+            
+            // Filter PRs closed in the last week
+            const recentClosedPRs = closedPRs.filter(pr => {
+              return new Date(pr.closed_at) >= oneWeekAgo;
+            });
+            
+            console.log(`Found ${closedIssues.length} closed issues and ${recentClosedPRs.length} closed PRs from the last week`);
+            
+            // Here you would typically move these items to an "Archived" column in your project
+            // For now, we'll create a summary comment
+            
+            if (closedIssues.length > 0 || recentClosedPRs.length > 0) {
+              // Create a weekly summary issue
+              const summaryBody = `# Weekly Project Summary - ${new Date().toISOString().split('T')[0]}
+              
+              ## Completed This Week 🎉
+              
+              ### Closed Issues (${closedIssues.length})
+              ${closedIssues.map(issue => `- #${issue.number}: ${issue.title}`).join('\n')}
+              
+              ### Merged/Closed PRs (${recentClosedPRs.length})
+              ${recentClosedPRs.map(pr => `- #${pr.number}: ${pr.title} ${pr.merged_at ? '(merged)' : '(closed)'}`).join('\n')}
+              
+              ## Project Health
+              - Issues resolved: ${closedIssues.length}
+              - PRs processed: ${recentClosedPRs.length}
+              - Weekly cycle completed successfully ✅
+              
+              ---
+              *This is an automated weekly summary generated by the project management workflow.*`;
+              
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Weekly Summary - ${new Date().toISOString().split('T')[0]}`,
+                body: summaryBody,
+                labels: ['weekly-summary', 'automated']
+              });
+            }
+
+      - name: Generate Project Metrics
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Collect project metrics
+            const { data: allIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all',
+              per_page: 100
+            });
+            
+            const openIssues = allIssues.filter(issue => issue.state === 'open' && !issue.pull_request);
+            const closedIssues = allIssues.filter(issue => issue.state === 'closed' && !issue.pull_request);
+            
+            const { data: allPRs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all',
+              per_page: 100
+            });
+            
+            const openPRs = allPRs.filter(pr => pr.state === 'open');
+            const closedPRs = allPRs.filter(pr => pr.state === 'closed');
+            
+            // Calculate metrics
+            const metrics = {
+              total_issues: allIssues.length,
+              open_issues: openIssues.length,
+              closed_issues: closedIssues.length,
+              total_prs: allPRs.length,
+              open_prs: openPRs.length,
+              closed_prs: closedPRs.length,
+              issue_closure_rate: ((closedIssues.length / allIssues.length) * 100).toFixed(1),
+              pr_merge_rate: ((closedPRs.length / allPRs.length) * 100).toFixed(1)
+            };
+            
+            console.log('Project Metrics:', JSON.stringify(metrics, null, 2));
+            
+            // Store metrics in job summary
+            core.summary
+              .addHeading('📊 Weekly Project Metrics')
+              .addTable([
+                [{data: 'Metric', header: true}, {data: 'Value', header: true}],
+                ['Total Issues', metrics.total_issues.toString()],
+                ['Open Issues', metrics.open_issues.toString()],
+                ['Closed Issues', metrics.closed_issues.toString()],
+                ['Issue Closure Rate', `${metrics.issue_closure_rate}%`],
+                ['Total PRs', metrics.total_prs.toString()],
+                ['Open PRs', metrics.open_prs.toString()],
+                ['Closed PRs', metrics.closed_prs.toString()],
+                ['PR Success Rate', `${metrics.pr_merge_rate}%`]
+              ])
+              .write();
+
+  label-management:
+    name: Automated Label Management
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && (github.event.action == 'opened' || github.event.action == 'labeled')
+    
+    steps:
+      - name: Auto-assign Priority Labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            const labels = issue.labels.map(label => label.name);
+            
+            // Auto-assign priority based on labels and content
+            let priorityLabel = null;
+            
+            if (labels.includes('bug')) {
+              // Check if it's a critical bug
+              const criticalKeywords = ['crash', 'data loss', 'security', 'critical', 'urgent'];
+              const issueText = (issue.title + ' ' + issue.body).toLowerCase();
+              
+              if (criticalKeywords.some(keyword => issueText.includes(keyword))) {
+                priorityLabel = 'priority:high';
+              } else {
+                priorityLabel = 'priority:medium';
+              }
+            } else if (labels.includes('enhancement') || labels.includes('feature-request')) {
+              priorityLabel = 'priority:low';
+            }
+            
+            // Auto-assign area labels based on content
+            const areaLabels = [];
+            const issueText = (issue.title + ' ' + issue.body).toLowerCase();
+            
+            if (issueText.includes('ai') || issueText.includes('conversation') || issueText.includes('chat')) {
+              areaLabels.push('area:ai');
+            }
+            if (issueText.includes('admin') || issueText.includes('moderation') || issueText.includes('permission')) {
+              areaLabels.push('area:admin');
+            }
+            if (issueText.includes('config') || issueText.includes('setup') || issueText.includes('install')) {
+              areaLabels.push('area:config');
+            }
+            if (issueText.includes('performance') || issueText.includes('slow') || issueText.includes('lag')) {
+              areaLabels.push('area:performance');
+            }
+            if (issueText.includes('i18n') || issueText.includes('translation') || issueText.includes('language')) {
+              areaLabels.push('area:i18n');
+            }
+            
+            // Apply labels
+            const labelsToAdd = [priorityLabel, ...areaLabels].filter(Boolean);
+            
+            if (labelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: labelsToAdd
+              });
+              
+              console.log(`Auto-assigned labels: ${labelsToAdd.join(', ')}`);
+            }
+
+  stale-issue-management:
+    name: Stale Issue Management
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 0 * * 0' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'stale')
+    
+    steps:
+      - name: Mark Stale Issues
+        uses: actions/stale@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: |
+            🕒 **This issue has been automatically marked as stale**
+            
+            This issue has been open for 30 days without recent activity. It will be closed in 7 days unless there is new activity.
+            
+            **To keep this issue open:**
+            - Add a comment with updates or additional information
+            - Add the `keep-open` label to prevent auto-closure
+            
+            **If this issue is still relevant:**
+            - Please provide an update on the current status
+            - Add any new information that might help with resolution
+            
+            Thank you for your contribution to Ausuka.ai! 🤖
+          stale-pr-message: |
+            🕒 **This PR has been automatically marked as stale**
+            
+            This pull request has been open for 30 days without recent activity. It will be closed in 7 days unless there is new activity.
+            
+            **To keep this PR open:**
+            - Push new commits or respond to review feedback
+            - Add the `keep-open` label to prevent auto-closure
+            
+            **If this PR is still in progress:**
+            - Please provide a status update
+            - Consider converting to draft if more work is needed
+            
+            Thank you for your contribution! 🚀
+          close-issue-message: |
+            🔒 **Closed due to inactivity**
+            
+            This issue was automatically closed because it has been stale for 7 days with no activity.
+            
+            **This doesn't mean your issue isn't valid!** If you believe this issue should remain open:
+            - Please reopen it and provide additional context
+            - Reference this issue in a new, more detailed issue
+            
+            We appreciate your understanding and contribution to the project! ✨
+          close-pr-message: |
+            🔒 **Closed due to inactivity**
+            
+            This pull request was automatically closed because it has been stale for 7 days with no activity.
+            
+            **Your contribution is still valued!** If you'd like to continue with this PR:
+            - Please reopen it and address any pending feedback
+            - Create a new PR if significant changes are needed
+            
+            Thank you for your contribution to Ausuka.ai! 🎉
+          days-before-stale: 30
+          days-before-close: 7
+          exempt-issue-labels: 'keep-open,pinned,security'
+          exempt-pr-labels: 'keep-open,pinned'
+          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'

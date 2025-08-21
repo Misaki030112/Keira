@@ -1,0 +1,304 @@
+name: Enhanced AI Issue Processing
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  ai-issue-processor:
+    name: AI-Powered Issue Analysis
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'ai-processing')
+    
+    steps:
+      - name: Extract Issue Content
+        id: extract
+        run: |
+          # Extract issue content using proper parsing
+          issue_body='${{ github.event.issue.body }}'
+          
+          # Parse the markdown form to extract relevant sections
+          natural_desc=$(echo "$issue_body" | awk '/### Describe Your Idea/,/### Additional Context/' | grep -v "###" | head -n -1)
+          additional_context=$(echo "$issue_body" | awk '/### Additional Context/,/### AI Processing Agreement/' | grep -v "###" | head -n -1)
+          
+          # Clean up extracted content
+          natural_desc=$(echo "$natural_desc" | sed '/^$/d' | tr '\n' ' ')
+          additional_context=$(echo "$additional_context" | sed '/^$/d' | tr '\n' ' ')
+          
+          echo "natural_description=$natural_desc" >> $GITHUB_OUTPUT
+          echo "additional_context=$additional_context" >> $GITHUB_OUTPUT
+          echo "issue_title=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+
+      - name: AI Analysis and Classification
+        id: ai-analysis
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          # Prepare AI prompt for issue classification and formatting
+          natural_desc="${{ steps.extract.outputs.natural_description }}"
+          additional_context="${{ steps.extract.outputs.additional_context }}"
+          issue_title="${{ steps.extract.outputs.issue_title }}"
+          
+          # Create AI prompt
+          cat > ai_prompt.txt << 'EOF'
+          You are an expert project manager for the Ausuka.ai Minecraft mod project. Analyze the following user input and help categorize and format it as a proper GitHub issue.
+
+          Project Context:
+          - Ausuka.ai is a Minecraft Fabric mod that adds AI assistant capabilities
+          - It provides natural language conversation, survival assistance, building help, and server administration tools
+          - The mod uses various AI providers (OpenAI, DeepSeek, Claude, etc.) for its functionality
+          - The project is actively developed with a focus on user experience and server compatibility
+
+          User Input:
+          Title: ${issue_title}
+          Description: ${natural_desc}
+          Additional Context: ${additional_context}
+
+          Please analyze this input and provide:
+
+          1. CLASSIFICATION: Determine if this is a:
+             - bug (something is broken, not working, causing errors)
+             - enhancement (improvement to existing functionality)
+             - feature (completely new functionality)
+
+          2. PRIORITY: Assess priority level:
+             - high (critical issues, crashes, security, data loss)
+             - medium (significant impact on user experience)
+             - low (nice to have, minor improvements)
+
+          3. AREAS: Identify relevant areas (multiple possible):
+             - ai (AI conversation, responses, model integration)
+             - admin (server administration, permissions, moderation)
+             - config (configuration, setup, installation)
+             - performance (speed, memory, optimization)
+             - i18n (internationalization, translations)
+             - ui (user interface, commands, interactions)
+             - tools (player assistance tools, inventory, teleportation)
+
+          4. FORMATTED_CONTENT: Rewrite the issue content in a clear, structured format appropriate for the identified type. Include:
+             - Clear problem statement or feature description
+             - Technical details and context
+             - Steps to reproduce (for bugs)
+             - Expected behavior vs actual behavior (for bugs)
+             - Use cases and benefits (for features/enhancements)
+             - Implementation considerations
+
+          Respond in this exact JSON format:
+          {
+            "classification": "bug|enhancement|feature",
+            "priority": "high|medium|low",
+            "areas": ["area1", "area2"],
+            "title": "reformatted title starting with [Bug]|[Enhancement]|[Feature]",
+            "labels": ["label1", "label2", "label3"],
+            "formatted_content": "the complete formatted issue content in markdown"
+          }
+          EOF
+          
+          # Choose AI provider based on available API keys
+          if [ ! -z "$OPENAI_API_KEY" ]; then
+            # Use OpenAI
+            response=$(curl -s -X POST "https://api.openai.com/v1/chat/completions" \
+              -H "Authorization: Bearer $OPENAI_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "model": "gpt-4o-mini",
+                "messages": [
+                  {
+                    "role": "system",
+                    "content": "You are an expert project manager for a Minecraft mod project. Respond only with valid JSON."
+                  },
+                  {
+                    "role": "user", 
+                    "content": "'"$(cat ai_prompt.txt | sed 's/"/\\"/g' | tr '\n' ' ')"'"
+                  }
+                ],
+                "temperature": 0.3,
+                "max_tokens": 2000
+              }')
+            
+            # Extract the content from OpenAI response
+            ai_response=$(echo "$response" | jq -r '.choices[0].message.content')
+            
+          elif [ ! -z "$DEEPSEEK_API_KEY" ]; then
+            # Use DeepSeek
+            response=$(curl -s -X POST "https://api.deepseek.com/v1/chat/completions" \
+              -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "model": "deepseek-chat",
+                "messages": [
+                  {
+                    "role": "system",
+                    "content": "You are an expert project manager for a Minecraft mod project. Respond only with valid JSON."
+                  },
+                  {
+                    "role": "user",
+                    "content": "'"$(cat ai_prompt.txt | sed 's/"/\\"/g' | tr '\n' ' ')"'"
+                  }
+                ],
+                "temperature": 0.3,
+                "max_tokens": 2000
+              }')
+            
+            # Extract the content from DeepSeek response
+            ai_response=$(echo "$response" | jq -r '.choices[0].message.content')
+            
+          else
+            # Fallback to rule-based classification
+            echo "No AI API key available, using rule-based classification"
+            
+            # Simple rule-based classification
+            text_lower=$(echo "$natural_desc $additional_context" | tr '[:upper:]' '[:lower:]')
+            
+            if echo "$text_lower" | grep -qE "(crash|error|bug|broken|not.work|fail|exception)"; then
+              classification="bug"
+              priority="medium"
+              title_prefix="[Bug]"
+            elif echo "$text_lower" | grep -qE "(improve|better|enhance|optimize|faster)"; then
+              classification="enhancement"  
+              priority="medium"
+              title_prefix="[Enhancement]"
+            else
+              classification="feature"
+              priority="low"
+              title_prefix="[Feature]"
+            fi
+            
+            # Generate fallback response
+            ai_response='{
+              "classification": "'$classification'",
+              "priority": "'$priority'", 
+              "areas": ["ai"],
+              "title": "'$title_prefix' '$(echo "$issue_title" | sed 's/\[AI\]//')'",
+              "labels": ["'$classification'", "needs-review", "auto-processed"],
+              "formatted_content": "## Description\n\n'$natural_desc'\n\n## Additional Context\n\n'$additional_context'\n\n---\n*This issue was automatically processed using rule-based classification. Please review and add additional details as needed.*"
+            }'
+          fi
+          
+          # Validate and parse AI response
+          if echo "$ai_response" | jq . > /dev/null 2>&1; then
+            echo "ai_response<<EOF" >> $GITHUB_OUTPUT
+            echo "$ai_response" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "processing_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "AI response is not valid JSON, falling back to simple processing"
+            echo "processing_success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Issue with AI Analysis
+        if: steps.ai-analysis.outputs.processing_success == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const aiResponse = JSON.parse(`${{ steps.ai-analysis.outputs.ai_response }}`);
+            
+            // Update issue title and body
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              title: aiResponse.title,
+              body: aiResponse.formatted_content
+            });
+            
+            // Remove ai-processing label
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'ai-processing'
+              });
+            } catch (error) {
+              console.log('ai-processing label not found or already removed');
+            }
+            
+            // Add new labels
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: aiResponse.labels
+            });
+            
+            // Add success comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🤖 **AI Processing Complete**
+              
+              Your issue has been successfully analyzed and categorized:
+              
+              - **Type:** ${aiResponse.classification.charAt(0).toUpperCase() + aiResponse.classification.slice(1)}
+              - **Priority:** ${aiResponse.priority.charAt(0).toUpperCase() + aiResponse.priority.slice(1)}
+              - **Areas:** ${aiResponse.areas.join(', ')}
+              
+              The issue has been reformatted according to our project standards. Please review the content and add any additional details if needed.
+              
+              **Next Steps:**
+              - ✅ Issue categorized and formatted
+              - 🏷️ Appropriate labels applied
+              - 👥 Development team will review and provide feedback
+              
+              Thank you for using our AI-powered issue processing! 🚀`
+            });
+
+      - name: Handle Processing Errors
+        if: steps.ai-analysis.outputs.processing_success != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Add error comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `⚠️ **AI Processing Encountered Issues**
+              
+              We had trouble automatically processing your issue, but don't worry! The development team has been notified and will manually review your submission.
+              
+              **What happened:**
+              - AI processing service may be temporarily unavailable
+              - Your issue content will be manually categorized
+              - No information has been lost
+              
+              **What you can do:**
+              - Your issue is still valid and will be reviewed
+              - You can manually format it using our standard templates if you prefer
+              - Or simply wait for manual review from our team
+              
+              **Timeline:**
+              - Manual review typically happens within 24-48 hours
+              - You'll receive updates as the team processes your issue
+              
+              Thank you for your patience! 🙏`
+            });
+            
+            // Add error labels
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['ai-processing-error', 'needs-manual-review']
+            });
+            
+            // Remove ai-processing label
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'ai-processing'
+              });
+            } catch (error) {
+              console.log('ai-processing label not found or already removed');
+            }

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Community Server
+    url: https://github.com/Misaki030112/mc-ai-mod/discussions
+    about: Join our community discussions for general questions and mod showcase
+  - name: 📖 Documentation
+    url: https://github.com/Misaki030112/mc-ai-mod/blob/main/README.md
+    about: Read the documentation for setup and configuration help
+  - name: 🎮 Minecraft Server
+    url: minecraft://114.67.97.163:25565
+    about: Join our community server to experience Ausuka.ai in action
