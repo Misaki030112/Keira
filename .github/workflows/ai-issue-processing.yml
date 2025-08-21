@@ -1,5 +1,5 @@
 name: AI Issue Processing
-description: Automatically process and format AI-driven issues
+description: Process AI-driven issues using Python
 
 on:
   issues:
@@ -11,142 +11,70 @@ permissions:
 
 jobs:
   process-ai-issue:
-    name: Process AI-Driven Issue
+    name: 📝 Process AI Issue
     runs-on: ubuntu-latest
     if: contains(github.event.issue.labels.*.name, 'ai-processing')
     
     steps:
-      - name: Check AI Processing Label
-        id: check-label
-        run: |
-          echo "Processing AI-driven issue #${{ github.event.issue.number }}"
-          echo "should_process=true" >> $GITHUB_OUTPUT
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Extract Issue Content
-        id: extract-content
-        if: steps.check-label.outputs.should_process == 'true'
-        run: |
-          # Extract the natural description from the issue body
-          issue_body='${{ github.event.issue.body }}'
-          
-          # Parse the issue body to extract the natural description
-          # This is a simplified parser - in production you might want more robust parsing
-          natural_desc=$(echo "$issue_body" | sed -n '/### Describe Your Idea/,/### Additional Context/p' | head -n -1 | tail -n +2 | tr '\n' ' ')
-          additional_context=$(echo "$issue_body" | sed -n '/### Additional Context/,/### AI Processing Agreement/p' | head -n -1 | tail -n +2 | tr '\n' ' ')
-          
-          echo "natural_description=$natural_desc" >> $GITHUB_OUTPUT
-          echo "additional_context=$additional_context" >> $GITHUB_OUTPUT
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-      - name: Call AI API for Issue Processing
-        id: ai-processing
-        if: steps.check-label.outputs.should_process == 'true'
-        run: |
-          # This is where you would call your AI API to process the issue
-          # For now, we'll create a mock response
-          
-          natural_desc="${{ steps.extract-content.outputs.natural_description }}"
-          additional_context="${{ steps.extract-content.outputs.additional_context }}"
-          
-          # Mock AI processing logic - replace with actual AI API call
-          if [[ "$natural_desc" =~ crash|error|bug|broken|not.work ]]; then
-            issue_type="bug"
-            priority="high"
-            labels="bug,needs-investigation"
-          elif [[ "$natural_desc" =~ improve|better|enhance|optimize ]]; then
-            issue_type="enhancement"
-            priority="medium"  
-            labels="enhancement,improvement"
-          else
-            issue_type="feature"
-            priority="medium"
-            labels="enhancement,feature-request"
-          fi
-          
-          # Generate formatted issue content based on type
-          case $issue_type in
-            "bug")
-              formatted_content="## Bug Description
-          Based on your description: $natural_desc
-          
-          ## Environment
-          - Please provide mod version, Minecraft version, and Fabric version
-          - Environment details needed for reproduction
-          
-          ## Steps to Reproduce
-          Please provide detailed steps to reproduce this issue.
-          
-          ## Expected vs Actual Behavior
-          - **Expected:** [Please describe expected behavior]
-          - **Actual:** [Please describe what actually happens]
-          
-          ## Additional Context
-          $additional_context
-          
-          ---
-          *This issue was automatically formatted from an AI-driven template.*"
-              ;;
-            "enhancement")
-              formatted_content="## Current Behavior
-          Based on your description: $natural_desc
-          
-          ## Desired Improvement
-          [AI Analysis suggests this is an enhancement to existing functionality]
-          
-          ## Benefits
-          The proposed enhancement would provide:
-          - Improved user experience
-          - Better functionality
-          - Enhanced workflow
-          
-          ## Implementation Considerations
-          Please provide additional details about:
-          - Specific use cases
-          - Technical requirements
-          - Priority level
-          
-          ## Additional Context
-          $additional_context
-          
-          ---
-          *This issue was automatically formatted from an AI-driven template.*"
-              ;;
-            *)
-              formatted_content="## Feature Description
-          Based on your description: $natural_desc
-          
-          ## Problem Statement
-          This feature request addresses the need for new functionality.
-          
-          ## Proposed Solution
-          [Please provide more details about how this feature should work]
-          
-          ## Alternatives Considered
-          [Please list any alternative approaches you've considered]
-          
-          ## Additional Context
-          $additional_context
-          
-          ---
-          *This issue was automatically formatted from an AI-driven template.*"
-              ;;
-          esac
-          
-          echo "issue_type=$issue_type" >> $GITHUB_OUTPUT
-          echo "priority=$priority" >> $GITHUB_OUTPUT
-          echo "labels=$labels" >> $GITHUB_OUTPUT
-          echo "formatted_content<<EOF" >> $GITHUB_OUTPUT
-          echo "$formatted_content" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+      - name: 🤖 Process Issue with AI
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: python scripts/process_ai_issue.py
 
-      - name: Update Issue
-        if: steps.check-label.outputs.should_process == 'true'
+      - name: 📋 Update Issue
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const issueType = '${{ steps.ai-processing.outputs.issue_type }}';
-            const formattedContent = `${{ steps.ai-processing.outputs.formatted_content }}`;
-            const labels = '${{ steps.ai-processing.outputs.labels }}'.split(',');
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read outputs from Python script
+            const outputs = process.env.GITHUB_OUTPUT ? 
+              fs.readFileSync(process.env.GITHUB_OUTPUT, 'utf8') : '';
+            
+            console.log('Processing outputs...');
+            
+            // Parse outputs
+            let issueType = '';
+            let priority = '';
+            let labels = '';
+            let formattedContent = '';
+            
+            const lines = outputs.split('\n');
+            let inContent = false;
+            let contentLines = [];
+            
+            for (const line of lines) {
+              if (line.startsWith('issue_type=')) {
+                issueType = line.split('=')[1];
+              } else if (line.startsWith('priority=')) {
+                priority = line.split('=')[1];
+              } else if (line.startsWith('labels=')) {
+                labels = line.split('=')[1];
+              } else if (line === 'formatted_content<<EOF') {
+                inContent = true;
+              } else if (line === 'EOF' && inContent) {
+                inContent = false;
+              } else if (inContent) {
+                contentLines.push(line);
+              }
+            }
+            
+            formattedContent = contentLines.join('\n');
+            
+            console.log(`Issue Type: ${issueType}`);
+            console.log(`Priority: ${priority}`);
+            console.log(`Labels: ${labels}`);
             
             // Update issue title
             const originalTitle = context.payload.issue.title;
@@ -161,43 +89,53 @@ jobs:
               body: formattedContent
             });
             
-            // Remove ai-processing label and add new labels
-            await github.rest.issues.removeLabel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              name: 'ai-processing'
-            });
+            // Update labels
+            const labelList = labels.split(',').filter(l => l.trim());
             
-            // Add new labels
+            // Remove ai-processing label
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'ai-processing'
+              });
+            } catch (e) {
+              console.log('ai-processing label not found');
+            }
+            
+            // Add new labels including priority
+            const finalLabels = [...labelList, priority];
+            
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              labels: labels
+              labels: finalLabels
             });
             
-            // Add a comment explaining the processing
+            // Add processing comment
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body: `🤖 **AI Processing Complete**
               
-              Your issue has been automatically processed and formatted as a **${issueType}** request.
-              
-              The content has been restructured to follow our standard template format. Please review the generated content and add any missing details.
-              
-              **Next Steps:**
-              - Review the formatted content above
-              - Add any missing technical details
-              - The development team will review and provide feedback
-              
-              Thank you for using our AI-driven issue creation! 🚀`
+Your issue has been automatically processed and formatted as a **${issueType}** request.
+
+**What happened:**
+- ✅ Content analyzed and categorized
+- ✅ Issue formatted using appropriate template
+- ✅ Labels applied: ${finalLabels.join(', ')}
+- ✅ Priority assigned: ${priority}
+
+Please review the formatted content above and add any missing details.
+
+*Processed by AI automation system* 🚀`
             });
 
-      - name: Handle API Errors
-        if: failure() && steps.check-label.outputs.should_process == 'true'
+      - name: ❌ Handle Processing Errors
+        if: failure()
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -208,13 +146,13 @@ jobs:
               issue_number: context.issue.number,
               body: `⚠️ **AI Processing Failed**
               
-              We encountered an error while processing your AI-driven issue. The development team has been notified.
-              
-              **What you can do:**
-              - Please manually format your issue using one of our standard templates
-              - Or wait for manual review from the development team
-              
-              We apologize for the inconvenience and are working to resolve this issue.`
+There was an error processing your AI-driven issue. 
+
+**Next steps:**
+- Please manually format your issue using one of our standard templates
+- Or wait for manual review from the development team
+
+The error has been logged and will be investigated.`
             });
             
             // Add error label
@@ -222,5 +160,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              labels: ['ai-processing-error']
+              labels: ['ai-processing-error', 'needs-triage']
             });

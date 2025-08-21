@@ -1,10 +1,9 @@
-name: Issue-PR Relationship Enforcement
+name: Issue-PR Enforcement
+description: Ensure PRs are linked to issues
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
-  issues:
-    types: [closed, reopened]
+    types: [opened, edited]
 
 permissions:
   issues: write
@@ -12,42 +11,102 @@ permissions:
   contents: read
 
 jobs:
-  enforce-issue-pr-link:
-    name: Enforce Issue-PR 1:1 Relationship
+  check-issue-link:
+    name: 🔗 Check Issue Link
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     
     steps:
-      - name: Check PR-Issue Link
-        id: check-link
+      - name: 📋 Validate Issue Link
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const prBody = context.payload.pull_request.body || '';
-            const prTitle = context.payload.pull_request.title || '';
             
-            // Look for issue references in PR body and title
+            // Look for issue references
             const issueRegex = /(?:closes|fixes|resolves)\s+#(\d+)/gi;
-            const matches = [...prBody.matchAll(issueRegex), ...prTitle.matchAll(issueRegex)];
+            const matches = [...prBody.matchAll(issueRegex)];
             
             if (matches.length === 0) {
-              core.setOutput('has_linked_issue', 'false');
-              core.setOutput('error_message', 'No linked issue found. Every PR must reference an issue using "Closes #XXX", "Fixes #XXX", or "Resolves #XXX".');
+              // Add label and comment
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ['needs-issue-link']
+              });
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: `❌ **Missing Issue Link**
+                
+This PR needs to be linked to an issue using "Closes #XXX" format.
+
+**What to do:**
+1. Find or create a related issue
+2. Add "Closes #XXX" to your PR description
+3. The check will automatically pass once updated
+
+*This is required to maintain clear project tracking.*`
+              });
+              
+              core.setFailed('PR must reference an issue using "Closes #XXX" format');
               return;
             }
             
             if (matches.length > 1) {
-              core.setOutput('has_linked_issue', 'false');
-              core.setOutput('error_message', 'Multiple issues referenced. Each PR should only address one issue to maintain a 1:1 relationship.');
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ['needs-issue-link']
+              });
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: `❌ **Multiple Issues Referenced**
+                
+This PR references multiple issues. Please link to only one issue per PR.
+
+**Current references:** ${matches.map(m => `#${m[1]}`).join(', ')}
+
+*Keep PRs focused on a single issue for better tracking.*`
+              });
+              
+              core.setFailed('PR should only reference one issue');
               return;
             }
             
-            const issueNumber = matches[0][1];
-            core.setOutput('has_linked_issue', 'true');
-            core.setOutput('linked_issue', issueNumber);
+            // Success - remove label if it exists
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                name: 'needs-issue-link'
+              });
+            } catch (e) {
+              // Label doesn't exist, that's fine
+            }
             
-            // Check if the referenced issue exists and is open
+            console.log(`✅ PR correctly linked to issue #${matches[0][1]}`);
+
+      - name: ✅ Add Success Label
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: ['ready-for-review']
+            });
             try {
               const issue = await github.rest.issues.get({
                 owner: context.repo.owner,
