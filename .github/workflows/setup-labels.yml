@@ -2,16 +2,6 @@ name: Setup Project Labels
 
 on:
   workflow_dispatch:
-    inputs:
-      action:
-        description: 'Action to perform'
-        required: true
-        default: 'create'
-        type: choice
-        options:
-          - create
-          - update
-          - verify
 
 permissions:
   issues: write
@@ -19,11 +9,11 @@ permissions:
 
 jobs:
   setup-labels:
-    name: Setup Repository Labels
+    name: Create Repository Labels
     runs-on: ubuntu-latest
     
     steps:
-      - name: Create/Update Labels
+      - name: Create Labels
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -33,167 +23,63 @@ jobs:
               { name: 'bug', color: 'd73a4a', description: 'Something is not working correctly' },
               { name: 'enhancement', color: '0075ca', description: 'Improvement to existing functionality' },
               { name: 'feature-request', color: '7cfc00', description: 'Request for new functionality' },
+              { name: 'question', color: 'd876e3', description: 'Further information is requested' },
               
-              // Priority Labels
-              { name: 'priority:high', color: 'd73a4a', description: 'High priority - critical issues' },
-              { name: 'priority:medium', color: 'ff9500', description: 'Medium priority - important issues' },
-              { name: 'priority:low', color: 'ffff00', description: 'Low priority - nice to have' },
-              
-              // Area Labels
-              { name: 'area:ai', color: '8b5cf6', description: 'AI conversation, responses, model integration' },
-              { name: 'area:admin', color: '92400e', description: 'Server administration, permissions, moderation' },
-              { name: 'area:config', color: '6b7280', description: 'Configuration, setup, installation' },
-              { name: 'area:performance', color: 'f97316', description: 'Performance, speed, memory, optimization' },
-              { name: 'area:i18n', color: '3b82f6', description: 'Internationalization, translations' },
-              { name: 'area:ui', color: '10b981', description: 'User interface, commands, interactions' },
-              { name: 'area:tools', color: '06b6d4', description: 'Player assistance tools, inventory, teleportation' },
+              // Priority Labels (p0-p4)
+              { name: 'p0', color: 'b60205', description: 'Critical - Security issues, data loss' },
+              { name: 'p1', color: 'd93f0b', description: 'High - Important features, major bugs' },
+              { name: 'p2', color: 'fbca04', description: 'Medium - Normal features and improvements' },
+              { name: 'p3', color: '0e8a16', description: 'Low - Nice to have features' },
+              { name: 'p4', color: 'c5def5', description: 'Lowest - Future considerations' },
               
               // Status Labels
               { name: 'needs-triage', color: 'fbbf24', description: 'Needs initial review and categorization' },
-              { name: 'needs-review', color: '3b82f6', description: 'Needs review from maintainers' },
-              { name: 'needs-issue-link', color: 'd73a4a', description: 'PR needs to be linked to an issue' },
-              { name: 'needs-manual-review', color: 'f59e0b', description: 'Requires manual review from team' },
+              { name: 'needs-info', color: 'ffa500', description: 'Waiting for more information' },
+              { name: 'in-progress', color: '0052cc', description: 'Currently being worked on' },
+              { name: 'blocked', color: 'e11d21', description: 'Blocked by external dependency' },
+              { name: 'stale', color: '999999', description: 'No recent activity' },
               
-              // Automation Labels
+              // AI Processing Labels
               { name: 'ai-processing', color: '8b5cf6', description: 'Being processed by AI automation' },
               { name: 'ai-processing-error', color: 'd73a4a', description: 'AI processing encountered an error' },
-              { name: 'auto-processed', color: '10b981', description: 'Automatically processed by AI' },
-              { name: 'issue-linked', color: '10b981', description: 'PR is properly linked to an issue' },
-              
-              // Lifecycle Labels
-              { name: 'stale', color: '6b7280', description: 'No recent activity - may be closed' },
-              { name: 'keep-open', color: '10b981', description: 'Prevent from being marked as stale' },
-              { name: 'weekly-summary', color: '3b82f6', description: 'Automated weekly project summary' },
-              { name: 'automated', color: '6b7280', description: 'Created by automated processes' },
               
               // Special Labels
-              { name: 'good-first-issue', color: '7cfc00', description: 'Good for newcomers to the project' },
-              { name: 'help-wanted', color: '008672', description: 'Community help is appreciated' },
-              { name: 'security', color: 'd73a4a', description: 'Security-related issue' },
-              { name: 'documentation', color: '0075ca', description: 'Documentation updates or improvements' },
               { name: 'duplicate', color: '6b7280', description: 'Duplicate of another issue' },
               { name: 'wontfix', color: '6b7280', description: 'This will not be worked on' },
-              
-              // Project Management Labels
-              { name: 'sprint:current', color: '0075ca', description: 'Part of current sprint' },
-              { name: 'milestone:next', color: '0075ca', description: 'Target for next milestone' },
-              { name: 'blocked', color: 'd73a4a', description: 'Blocked by dependencies or other issues' },
-              { name: 'in-progress', color: 'ff9500', description: 'Currently being worked on' },
-              { name: 'associated-issue-closed', color: 'f59e0b', description: 'Associated issue has been closed' }
+              { name: 'good-first-issue', color: '7cfc00', description: 'Good for newcomers' }
             ];
             
-            const action = '${{ github.event.inputs.action }}';
+            console.log('🏷️  Creating repository labels...\n');
             
             for (const label of labels) {
               try {
-                if (action === 'create') {
-                  // Try to create the label
-                  await github.rest.issues.createLabel({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    name: label.name,
-                    color: label.color,
-                    description: label.description
-                  });
-                  console.log(`✅ Created label: ${label.name}`);
-                } else if (action === 'update') {
-                  // Try to update the label (create if it doesn't exist)
-                  try {
-                    await github.rest.issues.updateLabel({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      name: label.name,
-                      color: label.color,
-                      description: label.description
-                    });
-                    console.log(`🔄 Updated label: ${label.name}`);
-                  } catch (updateError) {
-                    if (updateError.status === 404) {
-                      // Label doesn't exist, create it
-                      await github.rest.issues.createLabel({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        name: label.name,
-                        color: label.color,
-                        description: label.description
-                      });
-                      console.log(`✅ Created missing label: ${label.name}`);
-                    } else {
-                      throw updateError;
-                    }
-                  }
-                } else if (action === 'verify') {
-                  // Just check if the label exists
-                  try {
-                    const existingLabel = await github.rest.issues.getLabel({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      name: label.name
-                    });
-                    console.log(`✅ Label exists: ${label.name} (${existingLabel.data.color})`);
-                  } catch (error) {
-                    if (error.status === 404) {
-                      console.log(`❌ Label missing: ${label.name}`);
-                    } else {
-                      throw error;
-                    }
-                  }
-                }
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                console.log(`✅ Created: ${label.name}`);
               } catch (error) {
-                if (error.status === 422 && action === 'create') {
-                  console.log(`⚠️  Label already exists: ${label.name}`);
+                if (error.status === 422) {
+                  console.log(`⚠️  Already exists: ${label.name}`);
                 } else {
-                  console.error(`❌ Error processing label ${label.name}:`, error.message);
+                  console.error(`❌ Error creating ${label.name}:`, error.message);
                 }
               }
             }
             
-            console.log(`\n🎉 Label ${action} operation completed!`);
+            console.log('\n🎉 Label setup completed!');
 
-      - name: Generate Label Summary
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            // Get all labels in the repository
-            const { data: existingLabels } = await github.rest.issues.listLabelsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
-            });
-            
-            // Categorize labels
-            const categories = {
-              'Type': existingLabels.filter(l => ['bug', 'enhancement', 'feature-request'].includes(l.name)),
-              'Priority': existingLabels.filter(l => l.name.startsWith('priority:')),
-              'Area': existingLabels.filter(l => l.name.startsWith('area:')),
-              'Status': existingLabels.filter(l => ['needs-triage', 'needs-review', 'needs-issue-link', 'needs-manual-review'].includes(l.name)),
-              'Automation': existingLabels.filter(l => ['ai-processing', 'ai-processing-error', 'auto-processed', 'issue-linked'].includes(l.name)),
-              'Lifecycle': existingLabels.filter(l => ['stale', 'keep-open', 'weekly-summary', 'automated'].includes(l.name)),
-              'Project Management': existingLabels.filter(l => ['sprint:current', 'milestone:next', 'blocked', 'in-progress', 'associated-issue-closed'].includes(l.name))
-            };
-            
-            // Generate summary
-            let summary = '## 🏷️ Repository Labels Summary\n\n';
-            
-            for (const [category, labels] of Object.entries(categories)) {
-              if (labels.length > 0) {
-                summary += `### ${category} Labels\n\n`;
-                for (const label of labels) {
-                  summary += `- \`${label.name}\` - ${label.description || 'No description'}\n`;
-                }
-                summary += '\n';
-              }
-            }
-            
-            summary += `### Statistics\n\n`;
-            summary += `- Total labels: ${existingLabels.length}\n`;
-            summary += `- Project management labels: ${Object.values(categories).flat().length}\n`;
-            summary += `- Other labels: ${existingLabels.length - Object.values(categories).flat().length}\n\n`;
-            
-            summary += `*Generated by automated label setup workflow*`;
-            
-            // Add to job summary
-            core.summary.addRaw(summary).write();
-            
-            console.log('📊 Label summary generated in job output');
+      - name: Display Summary
+        run: |
+          echo "## 📋 Labels Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Category | Labels |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Type** | bug, enhancement, feature-request, question |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Priority** | p0 (critical), p1 (high), p2 (medium), p3 (low), p4 (lowest) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | needs-triage, needs-info, in-progress, blocked, stale |" >> $GITHUB_STEP_SUMMARY
+          echo "| **AI** | ai-processing, ai-processing-error |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Special** | duplicate, wontfix, good-first-issue |" >> $GITHUB_STEP_SUMMARY

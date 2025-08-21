@@ -9,85 +9,56 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for suggesting an enhancement! Please describe how we can improve existing functionality.
+        ## Version Information
+        | Info | Details |
+        |------|---------|
+        | Mod Version | Please specify |
+        | Minecraft Version | Please specify |
+        | Fabric Version | Please specify |
 
   - type: textarea
     id: current-behavior
     attributes:
       label: Current Behavior
       description: Describe how the feature currently works
-      placeholder: Explain the current behavior that you'd like to improve
+      placeholder: Explain what happens now that you'd like to improve
     validations:
       required: true
 
   - type: textarea
     id: desired-behavior
     attributes:
-      label: Desired Behavior
-      description: Describe how you'd like the feature to work instead
-      placeholder: Explain the improved behavior you're suggesting
+      label: What would be better?
+      description: Describe how you'd like it to work instead
+      placeholder: Explain the improvement you're suggesting
     validations:
       required: true
 
   - type: textarea
-    id: benefits
+    id: why-better
     attributes:
-      label: Benefits
-      description: What benefits would this enhancement provide?
+      label: Why would this be better?
+      description: What benefits would this provide?
       placeholder: |
-        - Better user experience because...
-        - Improved performance because...
-        - More intuitive workflow because...
+        - Makes it easier to...
+        - Saves time because...
+        - More intuitive because...
     validations:
       required: true
 
-  - type: checkboxes
-    id: affected-areas
-    attributes:
-      label: Affected Areas
-      description: Which parts of the mod would this enhancement affect?
-      options:
-        - label: AI conversation system
-        - label: Tool usage and actions
-        - label: Player memory and locations
-        - label: Admin and moderation tools
-        - label: Configuration system
-        - label: Command interface
-        - label: Internationalization
-        - label: Performance
-
   - type: textarea
-    id: use-cases
+    id: examples
     attributes:
-      label: Use Cases
-      description: Provide specific examples of when this enhancement would be useful
+      label: Examples
+      description: Give specific examples of when this would help
       placeholder: |
-        Example scenarios where this enhancement would help:
-        1. When a player...
-        2. During server administration...
-        3. In multiplayer situations...
-
-  - type: checkboxes
-    id: impact
-    attributes:
-      label: Impact Assessment
-      description: How would you assess the impact of this change?
-      options:
-        - label: Small change with big impact
-        - label: Moderate change with good benefits
-        - label: Large change but necessary improvement
-        - label: Breaking change (requires migration)
+        Example situations:
+        1. When I'm building and need to...
+        2. During gameplay it would help if...
 
   - type: textarea
-    id: implementation-suggestions
+    id: technical-details
     attributes:
-      label: Implementation Suggestions
-      description: Do you have suggestions for how this could be implemented?
-      placeholder: Any technical approaches or implementation ideas
-
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: Additional Context
-      description: Any other relevant information
-      placeholder: Screenshots, examples, related issues, etc.
+      label: Technical Details (Optional)
+      description: Any technical suggestions or implementation ideas
+      placeholder: Only fill this if you have technical knowledge about implementation

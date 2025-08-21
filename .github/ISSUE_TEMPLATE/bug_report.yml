@@ -96,5 +96,4 @@ body:
         - label: Using OpenAI API
         - label: Using DeepSeek API
         - label: Using Claude API
-        - label: Using custom AI provider
         - label: AI features working normally before this issue
