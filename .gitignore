@@ -1,6 +1,7 @@
 # gradle
 
 .gradle/
+.github/.ai
 build/
 out/
 classes/
