@@ -31,7 +31,7 @@ loom {
 	splitEnvironmentSourceSets()
 
     mods {
-        "ausuka-ai-mod" {
+        "keira" {
             sourceSet sourceSets.main
             sourceSet sourceSets.client
         }

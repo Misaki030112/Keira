@@ -1,11 +1,18 @@
-# Ausuka.ai（Fabric Mod）
+# Keira（Minecraft Fabric Mod）
 
-<img src="src/main/resources/assets/ausuka-ai-mod/icon.png" alt="Ausuka.ai" width="120"/>
+<p align="center">
+  <img src="src/main/resources/assets/keira/icon.png" alt="Keira" width="160"/>
+</p>
 
-<a href="README.md"><img src="https://img.shields.io/badge/Language-English-blue?style=flat-square" alt="English"/></a>
-<a href="README.zh-CN.md"><img src="https://img.shields.io/badge/语言-简体中文-green?style=flat-square" alt="简体中文"/></a>
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/Language-English-blue?style=flat-square" alt="English"/></a>
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/语言-简体中文-green?style=flat-square" alt="简体中文"/></a>
+  
+</p>
 
-Ausuka.ai 是 Minecraft 里的 AI 助手，更像你世界里的“贾维斯”。你用自然语言交流，它会理解你的意图，帮助你玩、建、探，也能在需要时给出贴心的提醒。
+<small><em>说明：本项目已由 “Ausuka.ai” 更名为 “Keira”。</em></small>
+
+Keira 是 Minecraft 里的 AI 助手，更像你世界里的“贾维斯”。你用自然语言交流，它会理解你的意图，帮助你玩、建、探，也能在需要时给出贴心的提醒。
 
 社区服务器：`114.67.97.163:25565`（Fabric 1.21.8）。白名单开启，online‑mode 关闭。
 
@@ -37,7 +44,7 @@ Ausuka.ai 是 Minecraft 里的 AI 助手，更像你世界里的“贾维斯”�
   3) 使用 Java 21 启动服务端
 
 ## 配置（尽量简单）
-- 准备一个 AI Key。最省心的做法：在 `<.minecraft>/config/ausuka-ai-mod.properties` 写入你的 Key。
+- 准备一个 AI Key。最省心的做法：在 `<.minecraft>/config/keira.properties` 写入你的 Key。
 - 支持常见服务商；也可使用环境变量或 JVM 启动参数按你自己的习惯配置。
 - 服务器语言固定为 `en_us`；玩家端收到的信息会按客户端语言显示（zh_cn、en_us、ja_jp 等）。
 

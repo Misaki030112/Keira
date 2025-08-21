@@ -1,11 +1,18 @@
-# Ausuka.ai (Fabric Mod)
+# Keira (Minecraft Fabric Mod)
 
-<img src="src/main/resources/assets/ausuka-ai-mod/icon.png" alt="Ausuka.ai" width="120"/>
+<p align="center">
+  <img src="src/main/resources/assets/keira/icon.png" alt="Keira" width="160"/>
+</p>
 
-<a href="README.md"><img src="https://img.shields.io/badge/Language-English-blue?style=flat-square" alt="English"/></a>
-<a href="README.zh-CN.md"><img src="https://img.shields.io/badge/语言-简体中文-green?style=flat-square" alt="简体中文"/></a>
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/Language-English-blue?style=flat-square" alt="English"/></a>
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/语言-简体中文-green?style=flat-square" alt="简体中文"/></a>
+  
+</p>
 
-Ausuka.ai is an in‑game AI assistant for Minecraft — a friendly “Jarvis”-like companion that understands what you say and helps you play, build, explore, and manage your world.
+<small><em>Note: This project was renamed from "Ausuka.ai" to "Keira".</em></small>
+
+Keira is an in‑game AI assistant for Minecraft — a friendly “Jarvis”-like companion that understands what you say and helps you play, build, explore, and manage your world.
 
 Community server: `114.67.97.163:25565` (Fabric 1.21.8, whitelist on, online‑mode off).
 
@@ -37,7 +44,7 @@ Community server: `114.67.97.163:25565` (Fabric 1.21.8, whitelist on, online‑m
   3) Start with Java 21
 
 ## Configure (Short & Simple)
-- Set your AI key once. Easiest: create `<.minecraft>/config/ausuka-ai-mod.properties` and put your key in it.
+- Set your AI key once. Easiest: create `<.minecraft>/config/keira.properties` and put your key in it.
 - Works with mainstream providers. You can also use environment variables or JVM args if you prefer.
 - Replies follow each player’s client language; the server language is `en_us`.
 

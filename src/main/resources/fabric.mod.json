@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "id": "ausuka-ai-mod",
+  "id": "keira",
   "version": "${version}",
-  "name": "Ausuka AI Mod",
+  "name": "Keira AI Mod",
   "description": "AI assistant and tools for Minecraft server with per-player i18n.",
-  "authors": ["Hinadt"],
+  "authors": ["Ausuka Misaki"],
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.hinadt.AusukaAiMod"
+      "com.keira.KeiraAiMod"
     ]
   },
   "mixins": [
-    "ausuka.mixins.json"
+    "keira.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.17.0",

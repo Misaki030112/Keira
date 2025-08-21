@@ -162,9 +162,9 @@ jobs:
           PORT=${DEPLOY_PORT:-22}
           echo "::group::Remote Cleanup"
           ssh -i ~/.ssh/id_rsa -p "$PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "mkdir -p \"${MC_SERVER_DIR}/mods\" && rm -f \"${MC_SERVER_DIR}/mods/ausuka-ai-mod*.jar\" || true"
+            "mkdir -p \"${MC_SERVER_DIR}/mods\" && rm -f \"${MC_SERVER_DIR}/mods/Keira*.jar\" || true"
           echo "::endgroup::"
-          echo "::notice title=Cleanup Done::Old ausuka-ai-mod JARs removed."
+          echo "::notice title=Cleanup Done::Old Keira JARs removed."
 
       # Upload the new JAR to the server mods directory
       - name: Upload New Mod Jar

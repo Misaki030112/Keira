@@ -8,18 +8,18 @@
             <transactionManager type="JDBC"/>
             <dataSource type="POOLED">
                 <property name="driver" value="org.h2.Driver"/>
-                <property name="url" value="jdbc:h2:./config/ausuka-ai/conversations;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1"/>
-                <property name="username" value="ausuka"/>
+                <property name="url" value="jdbc:h2:./config/keira-ai/conversations;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1"/>
+                <property name="username" value="keira"/>
                 <property name="password" value=""/>
             </dataSource>
         </environment>
     </environments>
 
     <mappers>
-        <mapper class="com.hinadt.persistence.mapper.ConversationMapper"/>
-        <mapper class="com.hinadt.persistence.mapper.LocationMapper"/>
-        <mapper class="com.hinadt.persistence.mapper.ModAdminMapper"/>
-        <mapper class="com.hinadt.persistence.mapper.PlayerProfileMapper"/>
-        <mapper class="com.hinadt.persistence.mapper.PlayerConnectionMapper"/>
+        <mapper class="com.keira.persistence.mapper.ConversationMapper"/>
+        <mapper class="com.keira.persistence.mapper.LocationMapper"/>
+        <mapper class="com.keira.persistence.mapper.ModAdminMapper"/>
+        <mapper class="com.keira.persistence.mapper.PlayerProfileMapper"/>
+        <mapper class="com.keira.persistence.mapper.PlayerConnectionMapper"/>
     </mappers>
 </configuration>
