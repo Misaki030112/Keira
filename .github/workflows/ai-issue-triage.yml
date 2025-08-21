@@ -1,8 +1,8 @@
-name: AI Issue Triage (DeepSeek)
+name: AI Issue
 
 on:
   issues:
-    types: [opened, edited, reopened, labeled]
+    types: [opened]
   workflow_dispatch:
 
 permissions:
