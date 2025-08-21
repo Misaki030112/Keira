@@ -2,7 +2,7 @@
 name: ✨ Feature Request
 description: Suggest a new feature for Ausuka.ai mod
 title: "[Feature] "
-labels: ["enhancement", "feature-request", "needs-triage"]
+labels: ["type:feature"]
 assignees: []
 
 body:

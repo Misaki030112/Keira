@@ -2,7 +2,7 @@
 name: ❓ Question
 description: Ask a question about the mod or get help with usage
 title: "[Q&A] "
-labels: ["question", "needs-answer"]
+labels: ["type:question"]
 assignees: []
 
 body:

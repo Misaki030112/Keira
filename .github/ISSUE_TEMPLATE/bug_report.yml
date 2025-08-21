@@ -2,7 +2,7 @@
 name: 🐛 Bug Report
 description: Report a bug in Ausuka.ai mod
 title: "[Bug] "
-labels: ["bug", "needs-triage"]
+labels: ["type:bug"]
 assignees: []
 
 body:

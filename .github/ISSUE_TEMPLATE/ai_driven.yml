@@ -2,7 +2,7 @@
 name: 🤖 AI-Driven Issue
 description: Just describe what you're thinking - AI will understand and standardize it
 title: "[AI] "
-labels: ["ai-processing", "needs-triage"]
+labels: ["ai:triage"]
 assignees: []
 
 body:
