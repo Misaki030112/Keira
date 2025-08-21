@@ -17,20 +17,23 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Try to import AI libraries
+# Try to import AI libraries - expose failures immediately
 try:
     import openai
-except ImportError:
+except ImportError as e:
+    logger.error(f"Failed to import openai: {e}")
     openai = None
 
 try:
     import anthropic
-except ImportError:
+except ImportError as e:
+    logger.error(f"Failed to import anthropic: {e}")
     anthropic = None
 
 try:
     from groq import Groq
-except ImportError:
+except ImportError as e:
+    logger.error(f"Failed to import groq: {e}")
     Groq = None
 
 def load_issue_templates() -> Dict[str, str]:
@@ -143,7 +146,7 @@ Respond with the JSON classification."""
             try:
                 client = openai.OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
