@@ -18,6 +18,7 @@ public class ToolRegistry {
     public final StatusEffectTools statusEffectTools;
     public final AdminTools adminTools;
     public final EnchantItemTool enchantItemTool;
+    public final CommandExecutionTool commandExecutionTool;
 
     public ToolRegistry(MinecraftServer server) {
         // Item tools
@@ -33,5 +34,6 @@ public class ToolRegistry {
 
         AiRuntime.initModAdminSystem(server);
         this.adminTools = new AdminTools(server, AiRuntime.getModAdminSystem());
+        this.commandExecutionTool = new CommandExecutionTool(server);
     }
 }
