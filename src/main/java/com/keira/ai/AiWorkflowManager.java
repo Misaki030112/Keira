@@ -97,7 +97,8 @@ public class AiWorkflowManager {
                             tools.statusEffectTools,
                             tools.playerStatsTools,
                             tools.worldAnalysisTools,
-                            tools.adminTools
+                            tools.adminTools,
+                            tools.commandExecutionTool
                     )
                     .call()
                     .content();
@@ -191,7 +192,8 @@ public class AiWorkflowManager {
                             tools.statusEffectTools,
                             tools.playerStatsTools,
                             tools.worldAnalysisTools,
-                            tools.adminTools
+                            tools.adminTools,
+                            tools.commandExecutionTool
                     )
                     .call()
                     .content();
@@ -221,10 +223,13 @@ public class AiWorkflowManager {
     private String buildToolAvailability(boolean isAdmin) {
         StringBuilder sb = new StringBuilder();
         sb.append("- Items, teleport, weather, world analysis, player stats: available\n");
+        sb.append("- Command execution: available as fallback for specialized requests (e.g., /give, /tp, /summon, /fill)\n");
         if (isAdmin) {
             sb.append("- Admin tools: enabled (kick/ban/force-teleport/jail, etc.)\n");
+            sb.append("- Admin commands: can execute dangerous commands (/ban, /op, etc.)\n");
         } else {
             sb.append("- Admin tools: restricted; risky operations require permission and will be denied\n");
+            sb.append("- Admin commands: blocked; only safe commands allowed (/give, /tp, /summon, etc.)\n");
         }
         return sb.toString();
     }

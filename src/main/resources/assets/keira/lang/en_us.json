@@ -97,5 +97,10 @@
   "tool.effect.applied": "§b[Keira] §fEffect %s applied (level %d, %s s)",
   "tool.effect.cleared.all": "§b[Keira] §fRemoved %s status effects.",
   "tool.effect.cleared.negative": "§b[Keira] §fRemoved %s negative effects.",
-  "tool.effect.cleared.specific": "§b[Keira] §fRemoved %s specified effects."
+  "tool.effect.cleared.specific": "§b[Keira] §fRemoved %s specified effects.",
+
+  "tool.command.executed": "§b[Keira] §fExecuted command: %s",
+  "tool.command.blocked": "§c[Keira] Command blocked for security: %s",
+  "tool.command.no_permission": "§c[Keira] Insufficient permissions for command: %s",
+  "tool.command.failed": "§c[Keira] Command execution failed: %s"
 }
